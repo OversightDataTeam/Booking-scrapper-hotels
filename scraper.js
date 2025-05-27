@@ -38,7 +38,7 @@ async function appendToCSV(hotels, filename, arrondissement, searchUrl, checkinD
   if (hotels.length > 0) {
     // Add header if file doesn't exist
     if (!fs.existsSync(filename)) {
-      const header = '"URL";"Nom";"Note";"Arrondissement";"Nombre de propriétés";"URL de recherche";"Date check-in";"Date check-out";"Date et heure du scraping"\n';
+      const header = '"URL";"Arrondissement";"Nombre de propriétés";"URL de recherche";"Date check-in";"Date check-out";"Date et heure du scraping"\n';
       fs.writeFileSync(filename, header);
     }
 
@@ -46,7 +46,7 @@ async function appendToCSV(hotels, filename, arrondissement, searchUrl, checkinD
     console.log(`📅 Writing to CSV with dates - Check-in: ${checkinDate}, Check-out: ${checkoutDate}, Scraping: ${scrapingDateTime}`);
 
     const csvContent = hotels.map(hotel => 
-      `"${hotel.url}";"${hotel.name}";"${hotel.rating}";"${arrondissement}";"${hotels.length}";"${searchUrl}";"${checkinDate}";"${checkoutDate}";"${scrapingDateTime}"`
+      `"${hotel.url}";"${arrondissement}";"${hotels.length}";"${searchUrl}";"${checkinDate}";"${checkoutDate}";"${scrapingDateTime}"`
     ).join('\n') + '\n';
     
     fs.appendFileSync(filename, csvContent);
@@ -256,10 +256,10 @@ function generateBookingUrl(arrondissement) {
   // Calculate dates
   const today = new Date();
   const checkin = new Date(today);
-  checkin.setDate(today.getDate() + 1); // Tomorrow
+  checkin.setDate(today.getDate() + 180); // 180 days from now
   
-  const checkout = new Date(today);
-  checkout.setDate(today.getDate() + 2); // Day after tomorrow
+  const checkout = new Date(checkin);
+  checkout.setDate(checkin.getDate() + 1); // Next day after check-in
 
   // Format dates as YYYY-MM-DD
   const formatDate = (date) => {
