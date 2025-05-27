@@ -34,26 +34,19 @@ function getCurrentDateTime() {
   return `${day}-${month}-${year} ${hours}:${minutes}`;
 }
 
-async function appendToCSV(hotels, filename, arrondissement, searchUrl, checkinDate, checkoutDate) {
-  if (hotels.length > 0) {
-    // Add header if file doesn't exist
-    if (!fs.existsSync(filename)) {
-      const header = '"Arrondissement";"Nombre de propriétés";"URL de recherche";"Date check-in";"Date check-out";"Date et heure du scraping"\n';
-      fs.writeFileSync(filename, header);
-    }
+async function appendToCSV(arrondissement, propertiesCount, filename) {
+  const today = new Date();
+  const date = today.toISOString().split('T')[0]; // Format YYYY-MM-DD
 
-    const scrapingDateTime = getCurrentDateTime();
-    console.log(`📅 Writing to CSV with dates - Check-in: ${checkinDate}, Check-out: ${checkoutDate}, Scraping: ${scrapingDateTime}`);
-
-    const csvContent = hotels.map(hotel => 
-      `"${arrondissement}";"${hotels.length}";"${searchUrl}";"${checkinDate}";"${checkoutDate}";"${scrapingDateTime}"`
-    ).join('\n') + '\n';
-    
-    fs.appendFileSync(filename, csvContent);
-    console.log(`💾 Added ${hotels.length} new unique hotels to CSV for arrondissement ${arrondissement}`);
-  } else {
-    console.log(`ℹ️ No new hotels to add to CSV for arrondissement ${arrondissement}`);
+  // Add header if file doesn't exist
+  if (!fs.existsSync(filename)) {
+    const header = '"Arrondissement";"Nombre de propriétés";"Date"\n';
+    fs.writeFileSync(filename, header);
   }
+
+  const csvContent = `"${arrondissement}";"${propertiesCount}";"${date}"\n`;
+  fs.appendFileSync(filename, csvContent);
+  console.log(`💾 Added summary for arrondissement ${arrondissement} with ${propertiesCount} properties`);
 }
 
 async function waitForHotelCards(page) {
@@ -94,43 +87,30 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--window-size=1280,800',
-      `--window-position=${(arrondissement % 5) * 300},0` // Position windows side by side
+      `--window-position=${(arrondissement % 5) * 300},0`
     ]
   });
-  console.log(`🌐 Browser launched for ${arrondissement}e arrondissement`);
 
   try {
     const page = await browser.newPage();
-    console.log(`📄 New page created for ${arrondissement}e arrondissement`);
-
-    // Set a longer timeout for navigation
     page.setDefaultNavigationTimeout(60000);
 
-    console.log(`⏳ Navigating to URL for ${arrondissement}e arrondissement...`);
     await page.goto(url, { 
       waitUntil: 'networkidle0',
       timeout: 60000 
     });
-    console.log(`✅ Page loaded successfully for ${arrondissement}e arrondissement`);
 
-    // Wait for hotel cards with retry mechanism
     const cardSelector = await waitForHotelCards(page);
-
     let hasMoreResults = true;
-    let allFoundHotels = new Map(); // Map to store all found hotels with their data
+    let allFoundHotels = new Map();
     let lastHeight = 0;
     let pageCount = 1;
 
-    // Create CSV file with fixed name
-    const filename = 'hotel_url.csv';
-    console.log(`📝 Using CSV file: ${filename}`);
+    const filename = 'arrondissements_summary.csv';
 
-    // First phase: collect all hotels
-    console.log('📥 Starting hotel collection phase...');
     while (hasMoreResults) {
       console.log(`\n📃 Processing page ${pageCount}...`);
       
-      // Get all current listings
       const listings = await page.$$(cardSelector);
       console.log(`📊 Found ${listings.length} listings on current page`);
       
@@ -140,22 +120,14 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
         continue;
       }
 
-      // Scroll through each listing quickly
-      console.log('🔄 Starting quick scroll through listings...');
       for (let i = 0; i < listings.length; i += 3) {
         const listing = listings[i];
         await listing.scrollIntoView({ behavior: 'auto', block: 'center' });
-        console.log(`   ⏳ Scrolled to listing ${i + 1}/${listings.length}`);
         await page.waitForTimeout(100);
       }
-      console.log('✅ Finished scrolling through listings');
 
-      // Wait for any new content to load
-      console.log('⏳ Waiting for new content to load...');
       await page.waitForTimeout(1000);
 
-      // Extract current page hotel data
-      console.log('🔍 Extracting hotel data from current page...');
       const currentPageHotels = await page.evaluate(() => {
         const hotels = [];
         const cards = document.querySelectorAll('[data-testid="property-card"]');
@@ -165,90 +137,51 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
           if (!titleLink) return;
 
           const url = titleLink.href;
-          const name = titleLink.querySelector('[data-testid="title"]')?.textContent?.trim() || '';
-          
-          // Get rating - keep the full rating value
-          const ratingElement = card.querySelector('[data-testid="review-score"]');
-          let rating = '';
-          if (ratingElement) {
-            const ratingText = ratingElement.textContent.trim();
-            // Extract the full rating value (e.g., "7,9" from "Avec une note de 7,9")
-            const ratingMatch = ratingText.match(/(\d+[,.]\d+)/);
-            rating = ratingMatch ? ratingMatch[1] : '';
-          }
-
-          hotels.push({ url, name, rating });
+          hotels.push({ url });
         });
         
         return hotels;
       });
-      console.log(`📊 Found ${currentPageHotels.length} hotels on current page`);
 
-      // Add all found hotels to our map
       currentPageHotels.forEach(hotel => {
         if (!allFoundHotels.has(hotel.url)) {
           allFoundHotels.set(hotel.url, hotel);
         }
       });
-      console.log(`📈 Total unique hotels found so far: ${allFoundHotels.size}`);
 
-      // Try to click the "Show more results" button
-      console.log('🔍 Looking for "Show more results" button...');
       try {
         const showMoreButton = await page.waitForSelector('button.de576f5064, button[data-testid="pagination-next"]', { timeout: 5000 });
         if (showMoreButton) {
-          console.log('✅ Found "Show more results" button, clicking...');
           await showMoreButton.click();
-          console.log('⏳ Waiting for new results to load...');
           await page.waitForTimeout(1000);
         } else {
-          console.log('❌ No more results button found');
           hasMoreResults = false;
         }
       } catch (error) {
-        console.log('❌ No more results button found (timeout)');
         hasMoreResults = false;
       }
 
-      // Check if we've reached the bottom
       const newHeight = await page.evaluate(() => document.body.scrollHeight);
       if (newHeight === lastHeight) {
-        console.log('📏 Page height unchanged, reached the end');
         hasMoreResults = false;
       }
       lastHeight = newHeight;
       pageCount++;
     }
 
-    // Second phase: process and save new unique hotels
-    console.log('\n📝 Starting hotel processing phase...');
-    const existingUrls = readExistingUrls(filename);
-    console.log(`📚 Found ${existingUrls.size} existing hotels in CSV`);
-
-    // Find new unique hotels
-    const newHotels = Array.from(allFoundHotels.values())
-      .filter(hotel => !existingUrls.has(hotel.url));
-    console.log(`📈 Found ${newHotels.length} new unique hotels to add`);
-
-    // Save new hotels to CSV with arrondissement, search URL and dates
-    if (newHotels.length > 0) {
-      console.log(`📅 Saving with dates - Check-in: ${checkinDate}, Check-out: ${checkoutDate}`);
-      await appendToCSV(newHotels, filename, arrondissement, url, checkinDate, checkoutDate);
-    }
+    // Save summary for this arrondissement
+    await appendToCSV(arrondissement, allFoundHotels.size, filename);
 
     console.log('\n📊 Scraping completed!');
     console.log(`📈 Total unique hotels found: ${allFoundHotels.size}`);
-    console.log(`💾 Added ${newHotels.length} new hotels to ${filename}`);
 
-    return Array.from(allFoundHotels.values());
+    return allFoundHotels.size;
 
   } catch (error) {
     console.error(`❌ Error occurred for ${arrondissement}e arrondissement:`, error);
     throw error;
   } finally {
-    console.log(`🔄 Closing browser for ${arrondissement}e arrondissement...`);
     await browser.close();
-    console.log(`✅ Browser closed for ${arrondissement}e arrondissement`);
   }
 }
 
