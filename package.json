@@ -1,0 +1,33 @@
+{
+    "name": "paris-hotels-scraper",
+    "version": "1.0.0",
+    "description": "Un scraper intelligent pour collecter les informations des hôtels de Paris par arrondissement",
+    "main": "scraper.js",
+    "scripts": {
+      "start": "node scraper.js"
+    },
+    "keywords": [
+      "scraper",
+      "puppeteer",
+      "paris",
+      "hotels",
+      "booking",
+      "automation"
+    ],
+    "author": "rcoco78",
+    "license": "MIT",
+    "dependencies": {
+      "puppeteer": "^21.0.0"
+    },
+    "engines": {
+      "node": ">=14.0.0"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/rcoco78/paris-hotels-scraper.git"
+    },
+    "bugs": {
+      "url": "https://github.com/rcoco78/paris-hotels-scraper/issues"
+    },
+    "homepage": "https://github.com/rcoco78/paris-hotels-scraper#readme"
+  }
