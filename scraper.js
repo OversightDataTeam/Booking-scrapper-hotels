@@ -75,10 +75,9 @@ async function waitForHotelCards(page) {
   throw new Error('No hotel card selectors found');
 }
 
-async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate) {
+async function scrapeBookingHotels(url, arrondissement) {
   console.log(`🚀 Starting scraping process for ${arrondissement}e arrondissement...`);
   console.log(`📝 Target URL: ${url}`);
-  console.log(`📅 Dates - Check-in: ${checkinDate}, Check-out: ${checkoutDate}`);
 
   const browser = await puppeteer.launch({
     headless: false,
@@ -100,82 +99,22 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
       timeout: 60000 
     });
 
-    const cardSelector = await waitForHotelCards(page);
-    let hasMoreResults = true;
-    let allFoundHotels = new Map();
-    let lastHeight = 0;
-    let pageCount = 1;
+    // Wait for the title element that contains the number of properties
+    await page.waitForSelector('h1[aria-live="assertive"]', { timeout: 10000 });
 
-    const filename = 'arrondissements_summary.csv';
+    // Extract the number of properties from the title
+    const propertiesCount = await page.evaluate(() => {
+      const title = document.querySelector('h1[aria-live="assertive"]').textContent;
+      const match = title.match(/(\d+)\s+établissements?/);
+      return match ? parseInt(match[1]) : 0;
+    });
 
-    while (hasMoreResults) {
-      console.log(`\n📃 Processing page ${pageCount}...`);
-      
-      const listings = await page.$$(cardSelector);
-      console.log(`📊 Found ${listings.length} listings on current page`);
-      
-      if (listings.length === 0) {
-        console.log('⚠️ No listings found, waiting for content...');
-        await page.waitForTimeout(5000);
-        continue;
-      }
-
-      for (let i = 0; i < listings.length; i += 3) {
-        const listing = listings[i];
-        await listing.scrollIntoView({ behavior: 'auto', block: 'center' });
-        await page.waitForTimeout(100);
-      }
-
-      await page.waitForTimeout(1000);
-
-      const currentPageHotels = await page.evaluate(() => {
-        const hotels = [];
-        const cards = document.querySelectorAll('[data-testid="property-card"]');
-        
-        cards.forEach(card => {
-          const titleLink = card.querySelector('a[data-testid="title-link"]');
-          if (!titleLink) return;
-
-          const url = titleLink.href;
-          hotels.push({ url });
-        });
-        
-        return hotels;
-      });
-
-      currentPageHotels.forEach(hotel => {
-        if (!allFoundHotels.has(hotel.url)) {
-          allFoundHotels.set(hotel.url, hotel);
-        }
-      });
-
-      try {
-        const showMoreButton = await page.waitForSelector('button.de576f5064, button[data-testid="pagination-next"]', { timeout: 5000 });
-        if (showMoreButton) {
-          await showMoreButton.click();
-          await page.waitForTimeout(1000);
-        } else {
-          hasMoreResults = false;
-        }
-      } catch (error) {
-        hasMoreResults = false;
-      }
-
-      const newHeight = await page.evaluate(() => document.body.scrollHeight);
-      if (newHeight === lastHeight) {
-        hasMoreResults = false;
-      }
-      lastHeight = newHeight;
-      pageCount++;
-    }
+    console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
 
     // Save summary for this arrondissement
-    await appendToCSV(arrondissement, allFoundHotels.size, filename);
+    await appendToCSV(arrondissement, propertiesCount, 'arrondissements_summary.csv');
 
-    console.log('\n📊 Scraping completed!');
-    console.log(`📈 Total unique hotels found: ${allFoundHotels.size}`);
-
-    return allFoundHotels.size;
+    return propertiesCount;
 
   } catch (error) {
     console.error(`❌ Error occurred for ${arrondissement}e arrondissement:`, error);
@@ -232,11 +171,7 @@ function generateBookingUrl(arrondissement) {
     .map(([key, value]) => `${key}=${value}`)
     .join('&');
 
-  return {
-    url: `${baseUrl}?${queryString}`,
-    checkinDate,
-    checkoutDate
-  };
+  return `${baseUrl}?${queryString}`;
 }
 
 // Array of arrondissements to scrape
@@ -251,9 +186,8 @@ async function scrapeAllArrondissements() {
     // Create an array of promises for the current batch
     const promises = batch.map(arrondissement => {
       console.log(`🏙️ Initializing scraping for ${arrondissement}e arrondissement...`);
-      const bookingData = generateBookingUrl(arrondissement);
-      console.log(`📅 Using dates - Check-in: ${bookingData.checkinDate}, Check-out: ${bookingData.checkoutDate}`);
-      return scrapeBookingHotels(bookingData.url, arrondissement, bookingData.checkinDate, bookingData.checkoutDate);
+      const url = generateBookingUrl(arrondissement);
+      return scrapeBookingHotels(url, arrondissement);
     });
 
     // Wait for all promises in the current batch to complete
