@@ -1,6 +1,14 @@
 const puppeteer = require('puppeteer');
-const fs = require('fs');
-const path = require('path');
+const {BigQuery} = require('@google-cloud/bigquery');
+
+// Initialize BigQuery client
+const bigquery = new BigQuery({
+  projectId: 'your-project-id', // Replace with your GCP project ID
+  keyFilename: 'path/to/your/service-account-key.json' // Replace with your service account key path
+});
+
+const datasetId = 'paris_hotels';
+const tableId = 'arrondissements_summary';
 
 function normalizeUrl(url) {
   // Extract the hotel path from the URL
@@ -34,19 +42,56 @@ function getCurrentDateTime() {
   return `${day}-${month}-${year} ${hours}:${minutes}`;
 }
 
-async function appendToCSV(arrondissement, propertiesCount, filename) {
+async function ensureTableExists() {
+  try {
+    // Check if dataset exists, create if it doesn't
+    const [datasets] = await bigquery.getDatasets();
+    const datasetExists = datasets.some(dataset => dataset.id === datasetId);
+    
+    if (!datasetExists) {
+      await bigquery.createDataset(datasetId);
+      console.log(`✅ Created dataset ${datasetId}`);
+    }
+
+    // Check if table exists, create if it doesn't
+    const [tables] = await bigquery.dataset(datasetId).getTables();
+    const tableExists = tables.some(table => table.id === tableId);
+    
+    if (!tableExists) {
+      const schema = {
+        fields: [
+          {name: 'arrondissement', type: 'INTEGER'},
+          {name: 'properties_count', type: 'INTEGER'},
+          {name: 'scraping_date', type: 'DATE'}
+        ]
+      };
+
+      await bigquery.dataset(datasetId).createTable(tableId, {schema});
+      console.log(`✅ Created table ${tableId}`);
+    }
+  } catch (error) {
+    console.error('❌ Error ensuring table exists:', error);
+    throw error;
+  }
+}
+
+async function appendToBigQuery(arrondissement, propertiesCount) {
   const today = new Date();
   const date = today.toISOString().split('T')[0]; // Format YYYY-MM-DD
 
-  // Add header if file doesn't exist
-  if (!fs.existsSync(filename)) {
-    const header = '"Arrondissement";"Nombre de propriétés";"Date"\n';
-    fs.writeFileSync(filename, header);
-  }
+  const rows = [{
+    arrondissement: arrondissement,
+    properties_count: propertiesCount,
+    scraping_date: date
+  }];
 
-  const csvContent = `"${arrondissement}";"${propertiesCount}";"${date}"\n`;
-  fs.appendFileSync(filename, csvContent);
-  console.log(`💾 Added summary for arrondissement ${arrondissement} with ${propertiesCount} properties`);
+  try {
+    await bigquery.dataset(datasetId).table(tableId).insert(rows);
+    console.log(`💾 Added data for arrondissement ${arrondissement} with ${propertiesCount} properties`);
+  } catch (error) {
+    console.error('❌ Error inserting data:', error);
+    throw error;
+  }
 }
 
 async function waitForHotelCards(page) {
@@ -75,9 +120,10 @@ async function waitForHotelCards(page) {
   throw new Error('No hotel card selectors found');
 }
 
-async function scrapeBookingHotels(url, arrondissement) {
+async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate) {
   console.log(`🚀 Starting scraping process for ${arrondissement}e arrondissement...`);
   console.log(`📝 Target URL: ${url}`);
+  console.log(`📅 Dates - Check-in: ${checkinDate}, Check-out: ${checkoutDate}`);
 
   const browser = await puppeteer.launch({
     headless: false,
@@ -111,8 +157,8 @@ async function scrapeBookingHotels(url, arrondissement) {
 
     console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
 
-    // Save summary for this arrondissement
-    await appendToCSV(arrondissement, propertiesCount, 'arrondissements_summary.csv');
+    // Save summary for this arrondissement to BigQuery
+    await appendToBigQuery(arrondissement, propertiesCount);
 
     return propertiesCount;
 
@@ -171,7 +217,11 @@ function generateBookingUrl(arrondissement) {
     .map(([key, value]) => `${key}=${value}`)
     .join('&');
 
-  return `${baseUrl}?${queryString}`;
+  return {
+    url: `${baseUrl}?${queryString}`,
+    checkinDate,
+    checkoutDate
+  };
 }
 
 // Array of arrondissements to scrape
@@ -186,8 +236,9 @@ async function scrapeAllArrondissements() {
     // Create an array of promises for the current batch
     const promises = batch.map(arrondissement => {
       console.log(`🏙️ Initializing scraping for ${arrondissement}e arrondissement...`);
-      const url = generateBookingUrl(arrondissement);
-      return scrapeBookingHotels(url, arrondissement);
+      const bookingData = generateBookingUrl(arrondissement);
+      console.log(`📅 Using dates - Check-in: ${bookingData.checkinDate}, Check-out: ${bookingData.checkoutDate}`);
+      return scrapeBookingHotels(bookingData.url, arrondissement, bookingData.checkinDate, bookingData.checkoutDate);
     });
 
     // Wait for all promises in the current batch to complete
@@ -206,5 +257,16 @@ async function scrapeAllArrondissements() {
   }
 }
 
-// Start scraping all arrondissements
-scrapeAllArrondissements(); 
+// Initialize BigQuery table before starting scraping
+async function main() {
+  try {
+    await ensureTableExists();
+    await scrapeAllArrondissements();
+  } catch (error) {
+    console.error('❌ Error in main process:', error);
+    process.exit(1);
+  }
+}
+
+// Start the scraping process
+main(); 

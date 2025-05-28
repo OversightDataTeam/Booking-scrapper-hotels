@@ -16,7 +16,8 @@
     "author": "rcoco78",
     "license": "MIT",
     "dependencies": {
-      "puppeteer": "^22.8.2"
+      "puppeteer": "^22.8.2",
+      "@google-cloud/bigquery": "^7.5.0"
     },
     "engines": {
       "node": ">=14.0.0"
