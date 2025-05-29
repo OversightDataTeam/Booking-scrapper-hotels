@@ -241,31 +241,20 @@ const arrondissements = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 
 // Function to scrape all arrondissements
 async function scrapeAllArrondissements() {
-  for (let i = 0; i < arrondissements.length; i += 5) {
-    const batch = arrondissements.slice(i, i + 5);
-    console.log(`\n🔄 Starting batch of arrondissements: ${batch.join(', ')}`);
-    
-    // Create an array of promises for the current batch
-    const promises = batch.map(arrondissement => {
-      console.log(`🏙️ Initializing scraping for ${arrondissement}e arrondissement...`);
-      const bookingData = generateBookingUrl(arrondissement);
-      console.log(`📅 Using dates - Check-in: ${bookingData.checkinDate}, Check-out: ${bookingData.checkoutDate}`);
-      return scrapeBookingHotels(bookingData.url, arrondissement, bookingData.checkinDate, bookingData.checkoutDate);
-    });
+  console.log(`\n🔄 Starting scraping for all arrondissements in parallel`);
+  
+  const promises = arrondissements.map(arrondissement => {
+    console.log(`🏙️ Initializing scraping for ${arrondissement}e arrondissement...`);
+    const bookingData = generateBookingUrl(arrondissement);
+    console.log(`📅 Using dates - Check-in: ${bookingData.checkinDate}, Check-out: ${bookingData.checkoutDate}`);
+    return scrapeBookingHotels(bookingData.url, arrondissement, bookingData.checkinDate, bookingData.checkoutDate);
+  });
 
-    // Wait for all promises in the current batch to complete
-    try {
-      await Promise.all(promises);
-      console.log(`✅ Completed batch of arrondissements: ${batch.join(', ')}\n`);
-    } catch (error) {
-      console.error(`❌ Error in batch ${batch.join(', ')}:`, error);
-    }
-
-    // Add a small delay between batches to avoid overwhelming the system
-    if (i + 5 < arrondissements.length) {
-      console.log('⏳ Waiting 5 seconds before starting next batch...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-    }
+  try {
+    await Promise.all(promises);
+    console.log(`✅ Completed scraping for all arrondissements\n`);
+  } catch (error) {
+    console.error(`❌ Error in scraping:`, error);
   }
 }
 
