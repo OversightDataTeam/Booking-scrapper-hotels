@@ -50,6 +50,11 @@ async function sendToWebhook(arrondissement, propertiesCount) {
   };
 
   try {
+    // Ajouter un délai aléatoire entre 2 et 5 secondes
+    const delay = Math.floor(Math.random() * 3000) + 2000;
+    console.log(`⏳ Waiting ${delay}ms before sending data...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+
     const response = await axios.post(WEBHOOK_URL, data, {
       headers: {
         'Content-Type': 'application/json',
