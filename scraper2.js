@@ -23,6 +23,15 @@ function getCurrentDateTime() {
   return `${day}-${month}-${year} ${hours}:${minutes}`;
 }
 
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  
+  return `${day}/${month}/${year}`;
+}
+
 async function sendToWebhook(arrondissement, propertiesCount, checkinDate, checkoutDate) {
   const data = {
     arrondissement,
