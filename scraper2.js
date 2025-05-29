@@ -35,10 +35,10 @@ function formatDate(dateString) {
 async function sendToWebhook(arrondissement, propertiesCount, checkinDate, checkoutDate) {
   const data = {
     arrondissement: arrondissement.toString(),
-    properties_count: propertiesCount,
-    check_in_date: formatDate(checkinDate),
-    check_out_date: formatDate(checkoutDate),
-    scraping_date: getCurrentDateTime()
+    propertiesCount: propertiesCount,
+    checkinDate: formatDate(checkinDate),
+    checkoutDate: formatDate(checkoutDate),
+    scrapingDate: getCurrentDateTime()
   };
 
   try {
@@ -59,9 +59,9 @@ async function sendToWebhook(arrondissement, propertiesCount, checkinDate, check
     
     console.log(`💾 Sent data for arrondissement ${arrondissement}:`);
     console.log(`   Properties: ${propertiesCount}`);
-    console.log(`   Check-in: ${data.check_in_date}`);
-    console.log(`   Check-out: ${data.check_out_date}`);
-    console.log(`   Scraping date: ${data.scraping_date}`);
+    console.log(`   Check-in: ${data.checkinDate}`);
+    console.log(`   Check-out: ${data.checkoutDate}`);
+    console.log(`   Scraping date: ${data.scrapingDate}`);
     console.log(`📡 Webhook response:`, response.data);
     
     // Vérifier si la réponse contient une erreur
