@@ -243,46 +243,88 @@ async function scrapeAllArrondissementsForDate(checkinDate, checkoutDate) {
 
 // Initialize scraping process
 async function main() {
-    console.log('\n🚀 STARTING SCRAPING PROCESS');
-    console.log('==========================');
-    console.log(`Start time: ${getCurrentDateTime()}`);
-    console.log('==========================\n');
-
     try {
         const dates = generateDates();
-
-        for (const datePair of dates) {
-            console.log('\n📅 DATE PAIR PROCESSING');
-            console.log('=====================');
-            console.log(`Processing dates: ${datePair.checkin} - ${datePair.checkout}`);
-            console.log(`Progress: ${dates.indexOf(datePair) + 1}/${dates.length} date pairs`);
-            console.log('=====================\n');
-
-            await scrapeAllArrondissementsForDate(datePair.checkin, datePair.checkout);
-
-            if (dates.indexOf(datePair) < dates.length - 1) {
-                console.log('\n⏳ WAITING PERIOD');
-                console.log('================');
-                console.log('Waiting 10 seconds before next date pair...');
-                await new Promise(resolve => setTimeout(resolve, 10000));
-                console.log('================\n');
+        console.log(`Generated ${dates.length} date pairs`);
+        
+        // Traiter chaque paire de dates
+        for (const [checkIn, checkOut] of dates) {
+            console.log(`\n[${new Date().toISOString()}] Processing dates: ${checkIn} to ${checkOut}`);
+            
+            // Traiter les arrondissements de manière séquentielle
+            for (let arrondissement = 1; arrondissement <= 20; arrondissement++) {
+                await scrapeArrondissement(arrondissement, checkIn, checkOut);
             }
+            
+            // Attendre 10 secondes entre chaque paire de dates
+            console.log(`Waiting 10 seconds before processing next date pair...`);
+            await new Promise(resolve => setTimeout(resolve, 10000));
         }
-
-        console.log('\n✨ SCRAPING COMPLETED');
-        console.log('==================');
-        console.log(`End time: ${getCurrentDateTime()}`);
-        console.log('==================\n');
-
+        
+        console.log('\nScraping completed successfully!');
     } catch (error) {
-        console.error('\n❌ FATAL ERROR');
-        console.error('=============');
-        console.error(`Error occurred at: ${getCurrentDateTime()}`);
-        console.error('Error details:', error);
-        console.error('=============\n');
-        process.exit(1);
+        console.error('Error in main process:', error);
     }
 }
 
 // Start the scraping process
-main(); 
+main();
+
+async function scrapeArrondissement(arrondissement, checkIn, checkOut) {
+    const browser = await puppeteer.launch({
+        headless: 'new',
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    
+    try {
+        const url = generateBookingUrl(arrondissement, checkIn, checkOut);
+        console.log(`\n[${new Date().toISOString()}] Scraping arrondissement ${arrondissement} for dates ${checkIn} to ${checkOut}`);
+        console.log(`URL: ${url}`);
+        
+        await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
+        
+        // Vérifier si nous sommes détectés comme un bot
+        const pageContent = await page.content();
+        if (pageContent.includes('bot') || pageContent.includes('captcha')) {
+            console.log(`⚠️ Possible bot detection for arrondissement ${arrondissement}`);
+            console.log('Page content preview:', pageContent.substring(0, 500));
+            return;
+        }
+        
+        // Attendre que les h1 soient chargés
+        await page.waitForSelector('h1', { timeout: 10000 });
+        
+        // Récupérer tous les h1
+        const h1Elements = await page.$$eval('h1', h1s => h1s.map(h1 => h1.textContent));
+        console.log(`Found ${h1Elements.length} h1 elements:`, h1Elements);
+        
+        // Extraire le nombre de propriétés
+        const h1Text = h1Elements[0] || '';
+        const match = h1Text.match(/(\d+)\s+(?:properties|établissements?)\s+(?:found|trouvés)/);
+        const numProperties = match ? parseInt(match[1]) : 0;
+        
+        console.log(`Found ${numProperties} properties in arrondissement ${arrondissement}`);
+        
+        // Envoyer les données une par une avec un délai
+        const data = {
+            arrondissement,
+            checkIn,
+            checkOut,
+            numProperties,
+            timestamp: new Date().toISOString()
+        };
+        
+        console.log(`Sending data to webhook for arrondissement ${arrondissement}...`);
+        await sendToWebhook(data);
+        console.log(`✅ Data sent successfully for arrondissement ${arrondissement}`);
+        
+        // Attendre 2 secondes avant de passer à l'arrondissement suivant
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+    } catch (error) {
+        console.error(`Error scraping arrondissement ${arrondissement}:`, error.message);
+    } finally {
+        await browser.close();
+    }
+} 
