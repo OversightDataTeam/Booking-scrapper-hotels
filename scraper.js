@@ -39,20 +39,21 @@ function getCurrentDateTime() {
 }
 
 async function sendToWebhook(arrondissement, propertiesCount) {
-  const today = new Date();
-  const date = today.toISOString().split('T')[0]; // Format YYYY-MM-DD
+  const now = new Date();
+  const date = now.toISOString().split('T')[0]; // Format YYYY-MM-DD
+  const timestamp = now.toISOString(); // Format ISO avec millisecondes
 
   const data = {
     arrondissement,
     properties_count: propertiesCount,
     date,
-    timestamp: new Date().toISOString()
+    timestamp: timestamp
   };
 
   try {
-    // Ajouter un délai aléatoire entre 2 et 5 secondes
-    const delay = Math.floor(Math.random() * 3000) + 2000;
-    console.log(`⏳ Waiting ${delay}ms before sending data...`);
+    // Ajouter un délai plus long entre 5 et 10 secondes
+    const delay = Math.floor(Math.random() * 5000) + 5000;
+    console.log(`⏳ Waiting ${delay}ms before sending data for arrondissement ${arrondissement}...`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
     const response = await axios.post(WEBHOOK_URL, data, {
@@ -65,7 +66,7 @@ async function sendToWebhook(arrondissement, propertiesCount) {
       }
     });
     
-    console.log(`💾 Sent data for arrondissement ${arrondissement} with ${propertiesCount} properties`);
+    console.log(`💾 Sent data for arrondissement ${arrondissement} with ${propertiesCount} properties at ${timestamp}`);
     console.log(`📡 Webhook response:`, response.data);
     
     // Vérifier si la réponse contient une erreur
