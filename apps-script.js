@@ -1,5 +1,6 @@
 // Configuration
-const SHEET_NAME = 'Sheet1'; // Nom de la feuille par défaut
+const DAILY_SHEET = 'RawData';
+const DAYS180_SHEET = '180DaysData';
 const SPREADSHEET_ID = '1PL7GjOp99vJZBQFIzV0GcN2kQn1wxjj7U2c7z8f22P4';
 
 // Fonction principale qui sera appelée par le webhook
@@ -10,28 +11,51 @@ function doPost(e) {
     
     // Get the active spreadsheet
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('RawData');
     
-    if (!sheet) {
-      // Si la feuille n'existe pas, on la crée
-      const newSheet = ss.insertSheet('RawData');
-      // Ajouter les en-têtes
-      newSheet.appendRow(['ObservationDate', 'Arrondissement', 'PropertiesCount']);
-      return doPost(e);
+    // Déterminer le type de données et la feuille correspondante
+    let sheetName, rowData;
+    
+    if (data.properties_count !== undefined) {
+      // Format pour scraper.js (données quotidiennes)
+      sheetName = DAILY_SHEET;
+      const now = new Date();
+      const observationDate = now.toISOString().slice(0, 19).replace('T', ' ');
+      rowData = [
+        observationDate,
+        data.arrondissement.toString(),
+        data.properties_count
+      ];
+    } else {
+      // Format pour scraper2.js (données sur 180 jours)
+      sheetName = DAYS180_SHEET;
+      rowData = [
+        data.arrondissement.toString(),
+        data.propertiesCount,
+        data.checkinDate,
+        data.checkoutDate,
+        data.scrapingDate
+      ];
     }
     
-    // Format the date as ISO DATETIME (YYYY-MM-DDTHH:mm:ss)
-    const now = new Date();
-    const observationDate = now.toISOString().slice(0, 19).replace('T', ' '); // Format: "2024-03-29 14:30:00"
+    // Obtenir ou créer la feuille appropriée
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      // Ajouter les en-têtes appropriés
+      if (sheetName === DAILY_SHEET) {
+        sheet.appendRow(['ObservationDate', 'Arrondissement', 'PropertiesCount']);
+      } else {
+        sheet.appendRow(['arrondissement', 'propertiesCount', 'check-in date', 'check-out date', 'scraping date']);
+      }
+      // Formater les en-têtes
+      const numColumns = sheetName === DAILY_SHEET ? 3 : 5;
+      sheet.getRange(1, 1, 1, numColumns)
+        .setFontWeight('bold')
+        .setBackground('#f3f3f3');
+      sheet.autoResizeColumns(1, numColumns);
+    }
     
-    // Prepare the row data with proper types
-    const rowData = [
-      observationDate,  // DATETIME in ISO format
-      data.arrondissement.toString(),  // Text
-      data.properties_count  // Number
-    ];
-    
-    // Append the data to the sheet
+    // Ajouter les données
     sheet.appendRow(rowData);
     
     return ContentService.createTextOutput(JSON.stringify({
@@ -47,92 +71,31 @@ function doPost(e) {
   }
 }
 
-// Fonction pour valider les données reçues
-function validateData(data) {
-  return (
-    data &&
-    typeof data.arrondissement === 'number' &&
-    typeof data.properties_count === 'number' &&
-    data.date
-  );
-}
-
-// Fonction pour ajouter les données à la feuille
-function appendToSheet(data) {
-  try {
-    console.log('📊 Attempting to append data to sheet');
-    
-    // Obtenir la feuille de calcul
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    console.log('📑 Opened spreadsheet');
-    
-    let sheet = spreadsheet.getSheetByName(SHEET_NAME);
-    console.log('Sheet exists:', !!sheet);
-    
-    // Si la feuille n'existe pas, la créer
-    if (!sheet) {
-      console.log('Creating new sheet...');
-      createSheet();
-      sheet = spreadsheet.getSheetByName(SHEET_NAME);
-    }
-    
-    // Préparer les données à ajouter dans le bon ordre
-    const rowData = [
-      data.date,                    // ObservationDate
-      data.arrondissement,          // Arrondissement
-      data.properties_count         // PropertiesCount
-    ];
-    
-    // Ajouter les données
-    sheet.appendRow(rowData);
-    
-    // Logger l'ajout
-    console.log(`✅ Data added for arrondissement ${data.arrondissement}`);
-  } catch (error) {
-    console.error('❌ Error in appendToSheet:', error);
-    console.error('Error stack:', error.stack);
-    throw error;
-  }
-}
-
-// Fonction pour créer la feuille si elle n'existe pas
-function createSheet() {
-  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = spreadsheet.insertSheet(SHEET_NAME);
-  
-  // Ajouter les en-têtes dans le bon ordre
-  sheet.appendRow([
-    'ObservationDate',
-    'Arrondissement',
-    'PropertiesCount'
-  ]);
-  
-  // Formater les en-têtes
-  sheet.getRange(1, 1, 1, 3)
-    .setFontWeight('bold')
-    .setBackground('#f3f3f3');
-  
-  // Ajuster la largeur des colonnes
-  sheet.autoResizeColumns(1, 3);
-  
-  console.log(`Feuille ${SHEET_NAME} créée avec succès`);
-}
-
-// Fonction pour créer une réponse HTTP
-function createResponse(statusCode, message) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: statusCode,
-    message: message
-  }))
-  .setMimeType(ContentService.MimeType.JSON);
-}
-
-// Fonction pour tester le script
-function testWebhook() {
+// Fonction pour tester le webhook avec les données quotidiennes
+function testDailyWebhook() {
   const testData = {
     arrondissement: 1,
-    properties_count: 123,
-    date: new Date().toISOString().split('T')[0]
+    properties_count: 123
+  };
+  
+  const e = {
+    postData: {
+      contents: JSON.stringify(testData)
+    }
+  };
+  
+  const response = doPost(e);
+  console.log('Test response:', response.getContent());
+}
+
+// Fonction pour tester le webhook avec les données sur 180 jours
+function test180DaysWebhook() {
+  const testData = {
+    arrondissement: 4,
+    propertiesCount: 92,
+    checkinDate: "23/11/2025",
+    checkoutDate: "24/11/2025",
+    scrapingDate: "27-05-2025 14:57"
   };
   
   const e = {
