@@ -251,10 +251,13 @@ async function main() {
         for (const datePair of dates) {
             console.log(`\n[${new Date().toISOString()}] Processing dates: ${datePair.checkin} to ${datePair.checkout}`);
             
-            // Traiter les arrondissements de manière séquentielle
-            for (let arrondissement = 1; arrondissement <= 20; arrondissement++) {
-                await scrapeArrondissement(arrondissement, datePair.checkin, datePair.checkout);
-            }
+            // Traiter tous les arrondissements en parallèle
+            const promises = arrondissements.map(arrondissement => 
+                scrapeArrondissement(arrondissement, datePair.checkin, datePair.checkout)
+            );
+            
+            // Attendre que tous les arrondissements soient traités
+            await Promise.all(promises);
             
             // Attendre 10 secondes entre chaque paire de dates
             console.log(`Waiting 10 seconds before processing next date pair...`);
