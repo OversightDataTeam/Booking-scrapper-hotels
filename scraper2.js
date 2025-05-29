@@ -23,16 +23,13 @@ function getCurrentDateTime() {
   return `${day}-${month}-${year} ${hours}:${minutes}`;
 }
 
-async function sendToWebhook(arrondissement, propertiesCount) {
-  const now = new Date();
-  const date = now.toISOString().split('T')[0]; // Format YYYY-MM-DD
-  const timestamp = now.toISOString(); // Format ISO avec millisecondes
-
+async function sendToWebhook(arrondissement, propertiesCount, checkinDate, checkoutDate) {
   const data = {
     arrondissement,
-    properties_count: propertiesCount,
-    date,
-    timestamp: timestamp
+    propertiesCount,
+    checkinDate: formatDate(checkinDate),
+    checkoutDate: formatDate(checkoutDate),
+    scrapingDate: getCurrentDateTime()
   };
 
   try {
@@ -51,7 +48,11 @@ async function sendToWebhook(arrondissement, propertiesCount) {
       }
     });
     
-    console.log(`💾 Sent data for arrondissement ${arrondissement} with ${propertiesCount} properties at ${timestamp}`);
+    console.log(`💾 Sent data for arrondissement ${arrondissement}:`);
+    console.log(`   Properties: ${propertiesCount}`);
+    console.log(`   Check-in: ${data.checkinDate}`);
+    console.log(`   Check-out: ${data.checkoutDate}`);
+    console.log(`   Scraping date: ${data.scrapingDate}`);
     console.log(`📡 Webhook response:`, response.data);
     
     // Vérifier si la réponse contient une erreur
@@ -161,7 +162,7 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
     console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
 
     // Send data to webhook
-    await sendToWebhook(arrondissement, propertiesCount);
+    await sendToWebhook(arrondissement, propertiesCount, checkinDate, checkoutDate);
 
     return propertiesCount;
 
@@ -209,7 +210,7 @@ function generateBookingUrl(arrondissement, checkinDate, checkoutDate) {
 }
 
 // Array of arrondissements to scrape
-const arrondissements = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+const arrondissements = [1];
 
 // Function to generate dates for the next 180 days
 function generateDates() {
