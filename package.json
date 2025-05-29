@@ -16,7 +16,7 @@
     "author": "",
     "license": "MIT",
     "dependencies": {
-      "puppeteer": "^21.0.0",
+      "puppeteer": "^22.8.2",
       "axios": "^1.6.0"
     },
     "engines": {
