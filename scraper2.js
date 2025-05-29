@@ -248,12 +248,12 @@ async function main() {
         console.log(`Generated ${dates.length} date pairs`);
         
         // Traiter chaque paire de dates
-        for (const [checkIn, checkOut] of dates) {
-            console.log(`\n[${new Date().toISOString()}] Processing dates: ${checkIn} to ${checkOut}`);
+        for (const datePair of dates) {
+            console.log(`\n[${new Date().toISOString()}] Processing dates: ${datePair.checkin} to ${datePair.checkout}`);
             
             // Traiter les arrondissements de manière séquentielle
             for (let arrondissement = 1; arrondissement <= 20; arrondissement++) {
-                await scrapeArrondissement(arrondissement, checkIn, checkOut);
+                await scrapeArrondissement(arrondissement, datePair.checkin, datePair.checkout);
             }
             
             // Attendre 10 secondes entre chaque paire de dates
