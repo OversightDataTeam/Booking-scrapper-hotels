@@ -51,8 +51,8 @@ async function sendToWebhook(arrondissement, propertiesCount) {
   };
 
   try {
-    // Ajouter un délai très long entre 15 et 30 secondes
-    const delay = Math.floor(Math.random() * 15000) + 15000;
+    // Ajouter un délai court entre 2 et 5 secondes
+    const delay = Math.floor(Math.random() * 3000) + 2000;
     console.log(`⏳ Waiting ${delay}ms before sending data for arrondissement ${arrondissement}...`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -250,21 +250,19 @@ const arrondissements = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 async function scrapeAllArrondissements() {
   console.log(`\n🔄 Starting scraping for all arrondissements in parallel`);
   
-  // Traiter les arrondissements de manière séquentielle
-  for (const arrondissement of arrondissements) {
+  const promises = arrondissements.map(arrondissement => {
     console.log(`🏙️ Initializing scraping for ${arrondissement}e arrondissement...`);
     const bookingData = generateBookingUrl(arrondissement);
     console.log(`📅 Using dates - Check-in: ${bookingData.checkinDate}, Check-out: ${bookingData.checkoutDate}`);
-    
-    await scrapeBookingHotels(bookingData.url, arrondissement, bookingData.checkinDate, bookingData.checkoutDate);
-    
-    // Attendre entre 30 et 45 secondes entre chaque arrondissement
-    const delay = Math.floor(Math.random() * 15000) + 30000;
-    console.log(`⏳ Waiting ${delay}ms before processing next arrondissement...`);
-    await new Promise(resolve => setTimeout(resolve, delay));
-  }
+    return scrapeBookingHotels(bookingData.url, arrondissement, bookingData.checkinDate, bookingData.checkoutDate);
+  });
 
-  console.log(`✅ Completed scraping for all arrondissements\n`);
+  try {
+    await Promise.all(promises);
+    console.log(`✅ Completed scraping for all arrondissements\n`);
+  } catch (error) {
+    console.error(`❌ Error in scraping:`, error);
+  }
 }
 
 // Initialize scraping process
