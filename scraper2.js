@@ -276,27 +276,67 @@ main();
 async function scrapeArrondissement(arrondissement, checkIn, checkOut) {
     const browser = await puppeteer.launch({
         headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-web-security',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--window-size=1920,1080'
+        ]
     });
     const page = await browser.newPage();
     
     try {
+        // Configuration plus réaliste du navigateur
+        await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+        await page.setViewport({ width: 1920, height: 1080 });
+        await page.setExtraHTTPHeaders({
+            'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1'
+        });
+
         const url = generateBookingUrl(arrondissement, checkIn, checkOut);
         console.log(`\n[${new Date().toISOString()}] Scraping arrondissement ${arrondissement} for dates ${checkIn} to ${checkOut}`);
         console.log(`URL: ${url}`);
         
-        await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
+        // Délai aléatoire avant de charger la page
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000));
+        
+        await page.goto(url, { 
+            waitUntil: 'networkidle0', 
+            timeout: 60000 
+        });
+        
+        // Délai aléatoire après le chargement
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 3000 + 2000));
+        
+        // Simuler le scroll
+        await page.evaluate(() => {
+            window.scrollTo(0, Math.random() * 500);
+        });
         
         // Vérifier si nous sommes détectés comme un bot
         const pageContent = await page.content();
         if (pageContent.includes('bot') || pageContent.includes('captcha')) {
             console.log(`⚠️ Possible bot detection for arrondissement ${arrondissement}`);
             console.log('Page content preview:', pageContent.substring(0, 500));
+            // Attendre plus longtemps en cas de détection
+            await new Promise(resolve => setTimeout(resolve, 30000));
             return;
         }
         
         // Attendre que les h1 soient chargés
         await page.waitForSelector('h1', { timeout: 10000 });
+        
+        // Délai aléatoire avant de récupérer les données
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000));
         
         // Récupérer tous les h1
         const h1Elements = await page.$$eval('h1', h1s => h1s.map(h1 => h1.textContent));
