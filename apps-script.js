@@ -3,6 +3,19 @@ const DAILY_SHEET = 'RawData';
 const DAYS180_SHEET = '180DaysData';
 const SPREADSHEET_ID = '1PL7GjOp99vJZBQFIzV0GcN2kQn1wxjj7U2c7z8f22P4';
 
+// Fonction pour vérifier si une donnée existe déjà
+function dataExists(sheet, arrondissement, date) {
+  const data = sheet.getDataRange().getValues();
+  // Pour les données quotidiennes, vérifier l'arrondissement et la date d'observation
+  if (sheet.getName() === DAILY_SHEET) {
+    return data.some(row => row[1] === date && row[2] === arrondissement.toString());
+  }
+  // Pour les données 180 jours, vérifier l'arrondissement et la date de check-in
+  else {
+    return data.some(row => row[0] === arrondissement.toString() && row[2] === date);
+  }
+}
+
 // Fonction principale qui sera appelée par le webhook
 function doPost(e) {
   try {
@@ -13,21 +26,22 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
     // Déterminer le type de données et la feuille correspondante
-    let sheetName, rowData;
+    let sheetName, rowData, date;
     
     if (data.properties_count !== undefined) {
       // Format pour scraper.js (données quotidiennes)
       sheetName = DAILY_SHEET;
       const now = new Date();
-      const observationDate = now.toISOString().slice(0, 19).replace('T', ' ');
+      date = now.toISOString().slice(0, 19).replace('T', ' ');
       rowData = [
-        observationDate,
+        date,
         data.arrondissement.toString(),
         data.properties_count
       ];
     } else {
       // Format pour scraper2.js (données sur 180 jours)
       sheetName = DAYS180_SHEET;
+      date = data.checkinDate;
       rowData = [
         data.arrondissement.toString(),
         data.propertiesCount,
@@ -53,6 +67,14 @@ function doPost(e) {
         .setFontWeight('bold')
         .setBackground('#f3f3f3');
       sheet.autoResizeColumns(1, numColumns);
+    }
+    
+    // Vérifier si la donnée existe déjà
+    if (dataExists(sheet, data.arrondissement, date)) {
+      return ContentService.createTextOutput(JSON.stringify({
+        'status': 'skipped',
+        'message': 'Data already exists for this arrondissement and date'
+      })).setMimeType(ContentService.MimeType.JSON);
     }
     
     // Ajouter les données
