@@ -18,9 +18,7 @@ jobs:
         node-version: '18'
         
     - name: Install dependencies
-      run: |
-        cd booking
-        npm install
+      run: npm install
         
     - name: Install Chrome
       run: |
@@ -28,9 +26,7 @@ jobs:
         sudo apt-get install -y chromium-browser
         
     - name: Run scraper
-      run: |
-        cd booking
-        node scraper.js
+      run: node scraper.js
         
     - name: Configure Git
       run: |
