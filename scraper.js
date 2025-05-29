@@ -110,13 +110,12 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
   console.log(`📅 Dates - Check-in: ${checkinDate}, Check-out: ${checkoutDate}`);
 
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: "new",
     defaultViewport: null,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--window-size=1280,800',
-      `--window-position=${(arrondissement % 5) * 300},0`
+      '--window-size=1280,800'
     ]
   });
 
