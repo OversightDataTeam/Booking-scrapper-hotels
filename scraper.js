@@ -115,7 +115,9 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--window-size=1280,800'
+      '--window-size=1280,800',
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process'
     ]
   });
 
@@ -123,13 +125,19 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
 
+    // Set user agent to avoid detection
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+
     await page.goto(url, { 
       waitUntil: 'networkidle0',
       timeout: 60000 
     });
 
     // Wait for the title element that contains the number of properties
-    await page.waitForSelector('h1[aria-live="assertive"]', { timeout: 10000 });
+    await page.waitForSelector('h1[aria-live="assertive"]', { 
+      timeout: 30000,
+      visible: true 
+    });
 
     // Extract the number of properties from the title
     const propertiesCount = await page.evaluate(() => {
