@@ -199,6 +199,7 @@ function generateBookingUrl(arrondissement) {
   const checkinDate = formatDate(checkin);
   const checkoutDate = formatDate(checkout);
 
+  // URL exacte de Booking.com
   const baseUrl = 'https://www.booking.com/searchresults.en-gb.html';
   const params = {
     ss: `${arrondissement}e+Arrondissement%2C+Parijs%2C+Ile+de+France%2C+Frankrijk`,
