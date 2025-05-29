@@ -219,7 +219,7 @@ function generateBookingUrl(arrondissement, checkinDate, checkoutDate) {
 }
 
 // Array of arrondissements to scrape
-const arrondissements = [1];
+const arrondissements = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
 // Function to generate dates for the next 180 days
 function generateDates() {
