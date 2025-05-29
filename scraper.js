@@ -142,7 +142,7 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
     // Extract the number of properties from the title
     const propertiesCount = await page.evaluate(() => {
       const title = document.querySelector('h1[aria-live="assertive"]').textContent;
-      const match = title.match(/(\d+)\s+établissements?/);
+      const match = title.match(/(\d+)\s+établissements?\s+trouvés/);
       return match ? parseInt(match[1]) : 0;
     });
 
