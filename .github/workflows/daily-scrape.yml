@@ -1,37 +1,43 @@
-name: Daily Hotel Scraping
+name: Daily Scrape
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Runs at midnight every day
-  workflow_dispatch:  # Allows manual trigger
+    - cron: '0 6 * * *'  # Run at 6 AM every day
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v3
     
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
       with:
-        node-version: '20'
+        node-version: '18'
         
     - name: Install dependencies
-      run: npm install
+      run: |
+        cd booking
+        npm install
         
-    - name: Install Chrome dependencies
+    - name: Install Chrome
       run: |
         sudo apt-get update
         sudo apt-get install -y chromium-browser
         
     - name: Run scraper
-      run: node scraper.js
+      run: |
+        cd booking
+        node scraper.js
+        
+    - name: Configure Git
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'github-actions@github.com'
         
     - name: Commit and push if changes
       run: |
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'actions@github.com'
-        git add hotel_url.csv
-        git commit -m "chore: update hotel data [skip ci]" || exit 0
-        git push 
+        git add .
+        git diff --quiet && git diff --staged --quiet || (git commit -m "chore: Update scraping results" && git push) 
