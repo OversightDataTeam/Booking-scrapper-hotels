@@ -1,14 +1,8 @@
 const puppeteer = require('puppeteer');
-const {BigQuery} = require('@google-cloud/bigquery');
+const axios = require('axios');
 
-// Initialize BigQuery client
-const bigquery = new BigQuery({
-  projectId: 'your-project-id', // Replace with your GCP project ID
-  keyFilename: 'path/to/your/service-account-key.json' // Replace with your service account key path
-});
-
-const datasetId = 'paris_hotels';
-const tableId = 'arrondissements_summary';
+// Webhook configuration
+const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzcZasnLmEpMTWYu6afYZqAketTr7j4plp0xvCRdykVU1qu9pMxRTJb27-xahGZDlwI/exec';
 
 function normalizeUrl(url) {
   // Extract the hotel path from the URL
@@ -42,55 +36,45 @@ function getCurrentDateTime() {
   return `${day}-${month}-${year} ${hours}:${minutes}`;
 }
 
-async function ensureTableExists() {
-  try {
-    // Check if dataset exists, create if it doesn't
-    const [datasets] = await bigquery.getDatasets();
-    const datasetExists = datasets.some(dataset => dataset.id === datasetId);
-    
-    if (!datasetExists) {
-      await bigquery.createDataset(datasetId);
-      console.log(`✅ Created dataset ${datasetId}`);
-    }
-
-    // Check if table exists, create if it doesn't
-    const [tables] = await bigquery.dataset(datasetId).getTables();
-    const tableExists = tables.some(table => table.id === tableId);
-    
-    if (!tableExists) {
-      const schema = {
-        fields: [
-          {name: 'arrondissement', type: 'INTEGER'},
-          {name: 'properties_count', type: 'INTEGER'},
-          {name: 'scraping_date', type: 'DATE'}
-        ]
-      };
-
-      await bigquery.dataset(datasetId).createTable(tableId, {schema});
-      console.log(`✅ Created table ${tableId}`);
-    }
-  } catch (error) {
-    console.error('❌ Error ensuring table exists:', error);
-    throw error;
-  }
-}
-
-async function appendToBigQuery(arrondissement, propertiesCount) {
+async function sendToWebhook(arrondissement, propertiesCount) {
   const today = new Date();
   const date = today.toISOString().split('T')[0]; // Format YYYY-MM-DD
 
-  const rows = [{
-    arrondissement: arrondissement,
+  const data = {
+    arrondissement,
     properties_count: propertiesCount,
-    scraping_date: date
-  }];
+    date,
+    timestamp: new Date().toISOString()
+  };
 
   try {
-    await bigquery.dataset(datasetId).table(tableId).insert(rows);
-    console.log(`💾 Added data for arrondissement ${arrondissement} with ${propertiesCount} properties`);
+    const response = await axios.post(WEBHOOK_URL, data, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      // Important pour Google Apps Script
+      params: {
+        'callback': 'callback'
+      }
+    });
+    
+    console.log(`💾 Sent data for arrondissement ${arrondissement} with ${propertiesCount} properties`);
+    console.log(`📡 Webhook response:`, response.data);
+    
+    // Vérifier si la réponse contient une erreur
+    if (response.data && response.data.error) {
+      throw new Error(response.data.error);
+    }
+    
+    return response.data;
   } catch (error) {
-    console.error('❌ Error inserting data:', error);
-    throw error;
+    console.error('❌ Error sending data to webhook:', error.message);
+    if (error.response) {
+      console.error('Response data:', error.response.data);
+      console.error('Response status:', error.response.status);
+    }
+    // Ne pas throw l'erreur pour continuer le scraping même si l'envoi échoue
+    return null;
   }
 }
 
@@ -157,8 +141,8 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
 
     console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
 
-    // Save summary for this arrondissement to BigQuery
-    await appendToBigQuery(arrondissement, propertiesCount);
+    // Send data to webhook
+    await sendToWebhook(arrondissement, propertiesCount);
 
     return propertiesCount;
 
@@ -257,10 +241,9 @@ async function scrapeAllArrondissements() {
   }
 }
 
-// Initialize BigQuery table before starting scraping
+// Initialize scraping process
 async function main() {
   try {
-    await ensureTableExists();
     await scrapeAllArrondissements();
   } catch (error) {
     console.error('❌ Error in main process:', error);
