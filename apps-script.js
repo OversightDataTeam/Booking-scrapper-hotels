@@ -8,10 +8,12 @@ function dataExists(sheet, arrondissement, date) {
   const data = sheet.getDataRange().getValues();
   // Pour les données quotidiennes, vérifier l'arrondissement et la date d'observation
   if (sheet.getName() === DAILY_SHEET) {
-    return data.some(row => row[1] === date && row[2] === arrondissement.toString());
+    // La date est en colonne 0, l'arrondissement en colonne 1
+    return data.some(row => row[0] === date && row[1] === arrondissement.toString());
   }
   // Pour les données 180 jours, vérifier l'arrondissement et la date de check-in
   else {
+    // L'arrondissement est en colonne 0, la date de check-in en colonne 2
     return data.some(row => row[0] === arrondissement.toString() && row[2] === date);
   }
 }
