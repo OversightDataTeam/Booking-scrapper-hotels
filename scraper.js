@@ -1,4 +1,6 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
 const axios = require('axios');
 
 // Webhook configuration
@@ -115,9 +117,8 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--window-size=1280,800',
-      '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process'
+      '--window-size=1920,1080',
+      '--start-maximized'
     ]
   });
 
@@ -126,23 +127,43 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
     page.setDefaultNavigationTimeout(60000);
 
     // Set user agent to avoid detection
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 
+    console.log('🌐 Navigating to:', url);
     await page.goto(url, { 
       waitUntil: 'networkidle0',
       timeout: 60000 
     });
 
+    console.log('🌐 Current URL:', await page.url());
+    
+    // Add a delay to ensure the page is fully loaded
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Log the page content for debugging
+    const pageContent = await page.content();
+    const pageContentLower = pageContent.toLowerCase();
+    if (pageContentLower.includes('robot') || pageContentLower.includes('captcha') || pageContentLower.includes('access denied')) {
+      console.warn('⚠️ Possible bot detection or access denied!');
+    }
+    console.log('📄 Page content (first 500 chars):', pageContent.substring(0, 500) + '...');
+
+    // Log all h1 contents
+    const h1Contents = await page.evaluate(() => Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim()));
+    console.log('🔍 Tous les h1 récupérés :', h1Contents);
+
     // Wait for the title element that contains the number of properties
-    await page.waitForSelector('h1[aria-live="assertive"]', { 
+    await page.waitForSelector('h1', { 
       timeout: 30000,
       visible: true 
     });
 
     // Extract the number of properties from the title
     const propertiesCount = await page.evaluate(() => {
-      const title = document.querySelector('h1[aria-live="assertive"]').textContent;
-      const match = title.match(/(\d+)\s+établissements?\s+trouvés/);
+      const h1s = Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim());
+      // Log explicitement les h1 dans le contexte navigateur
+      console.log('🔍 [browser context] h1s:', h1s);
+      const match = h1s.map(title => title.match(/(\d+)\s+(?:properties|établissements?)\s+(?:found|trouvés)/)).find(Boolean);
       return match ? parseInt(match[1]) : 0;
     });
 
