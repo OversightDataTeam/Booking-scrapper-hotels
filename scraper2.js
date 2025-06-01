@@ -228,16 +228,19 @@ function generateDates() {
 
 // Function to scrape all arrondissements for a specific date
 async function scrapeAllArrondissementsForDate(checkinDate, checkoutDate) {
-  console.log(`\n🔄 Starting scraping for all arrondissements in parallel for dates ${checkinDate} to ${checkoutDate}`);
-  const tasks = arrondissements.map(async (arrondissement) => {
-    const url = generateBookingUrl(arrondissement, checkinDate, checkoutDate);
-    try {
-      await scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate);
-      console.log(`✅ Completed scraping for ${arrondissement}e arrondissement for dates ${checkinDate} to ${checkoutDate}`);
-    } catch (error) {
-      console.error(`❌ Error scraping ${arrondissement}e arrondissement:`, error);
-    }
-  });
+  console.log(`\n🔄 Starting scraping for all arrondissements (5 en parallèle) pour les dates ${checkinDate} à ${checkoutDate}`);
+  const limit = pLimit(5); // Limite à 5 arrondissements en parallèle
+  const tasks = arrondissements.map(arrondissement =>
+    limit(async () => {
+      const url = generateBookingUrl(arrondissement, checkinDate, checkoutDate);
+      try {
+        await scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate);
+        console.log(`✅ Completed scraping for ${arrondissement}e arrondissement for dates ${checkinDate} to ${checkoutDate}`);
+      } catch (error) {
+        console.error(`❌ Error scraping ${arrondissement}e arrondissement:`, error);
+      }
+    })
+  );
   await Promise.all(tasks);
   console.log(`✅ Completed scraping for all arrondissements for dates ${checkinDate} to ${checkoutDate}\n`);
 }
