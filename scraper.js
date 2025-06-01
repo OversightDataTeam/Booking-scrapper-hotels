@@ -248,21 +248,16 @@ const arrondissements = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 
 // Function to scrape all arrondissements
 async function scrapeAllArrondissements() {
-  console.log(`\n🔄 Starting scraping for all arrondissements in parallel`);
-  
-  const promises = arrondissements.map(arrondissement => {
-    console.log(`🏙️ Initializing scraping for ${arrondissement}e arrondissement...`);
+  for (const arrondissement of arrondissements) {
     const bookingData = generateBookingUrl(arrondissement);
-    console.log(`📅 Using dates - Check-in: ${bookingData.checkinDate}, Check-out: ${bookingData.checkoutDate}`);
-    return scrapeBookingHotels(bookingData.url, arrondissement, bookingData.checkinDate, bookingData.checkoutDate);
-  });
-
-  try {
-    await Promise.all(promises);
-    console.log(`✅ Completed scraping for all arrondissements\n`);
-  } catch (error) {
-    console.error(`❌ Error in scraping:`, error);
+    try {
+      await scrapeBookingHotels(bookingData.url, arrondissement, bookingData.checkinDate, bookingData.checkoutDate);
+      console.log(`✅ Terminé pour le ${arrondissement}e arrondissement`);
+    } catch (error) {
+      console.error(`❌ Erreur pour le ${arrondissement}e arrondissement:`, error);
+    }
   }
+  console.log('✅ Scraping terminé pour tous les arrondissements');
 }
 
 // Initialize scraping process
