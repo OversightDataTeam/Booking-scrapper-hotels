@@ -1,5 +1,6 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const pLimit = require('p-limit');
 puppeteer.use(StealthPlugin());
 const axios = require('axios');
 
@@ -275,18 +276,16 @@ async function main() {
     const dates = generateDates();
     console.log(`Generated ${dates.length} date pairs`);
     
-    // Traiter chaque paire de dates
-    for (const datePair of dates) {
-      console.log(`\n[${new Date().toISOString()}] Processing dates: ${datePair.checkin} to ${datePair.checkout}`);
-      
-      // Scraper tous les arrondissements pour cette paire de dates
-      await scrapeAllArrondissementsForDate(datePair.checkin, datePair.checkout);
-      
-      // Attendre 10 secondes entre chaque paire de dates
-      console.log(`Waiting 10 seconds before processing next date pair...`);
-      await new Promise(resolve => setTimeout(resolve, 10000));
-    }
-    
+    const limit = pLimit(3); // Limite à 3 dates en parallèle
+    const dateTasks = dates.map(datePair =>
+      limit(async () => {
+        console.log(`\n[${new Date().toISOString()}] Processing dates: ${datePair.checkin} to ${datePair.checkout}`);
+        await scrapeAllArrondissementsForDate(datePair.checkin, datePair.checkout);
+        // Délai réduit pour aller plus vite
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      })
+    );
+    await Promise.all(dateTasks);
     console.log('\nScraping completed successfully!');
   } catch (error) {
     console.error('Error in main process:', error);
