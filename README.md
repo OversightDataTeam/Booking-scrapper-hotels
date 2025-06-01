@@ -1,6 +1,16 @@
-# Booking.com Paris Arrondissements Scraper
+# Paris Hotels Market Data Scraper (Booking.com, 180 Days)
 
-Ce projet scrape le nombre de propriétés disponibles sur Booking.com pour chaque arrondissement de Paris.
+Ce projet scrape le nombre de propriétés disponibles sur Booking.com pour chaque arrondissement de Paris, sur 180 jours glissants, et envoie les données vers Google Sheets puis BigQuery.
+
+---
+
+## 🗺️ Workflow
+
+```
+[Scraper Node.js] → [Google Apps Script Webhook] → [Google Sheets] → [BigQuery]
+```
+
+---
 
 ## Configuration
 
@@ -49,35 +59,66 @@ npm install
 
 ### Configuration du Scraper
 
-1. Mettre à jour l'URL du webhook dans `scraper.js` :
+1. Mettre à jour l'URL du webhook dans `scraper.js` ou `scraper2.js` :
 ```javascript
 const WEBHOOK_URL = 'votre-url-de-deploiement';
 ```
 
+---
+
 ## Utilisation
 
-Lancer le scraper :
+### Scraping d'une seule date (scraper.js)
 ```bash
 node scraper.js
 ```
 
+### Scraping sur 180 jours (scraper2.js)
+```bash
+node scraper2.js
+```
+
 Le script va :
-1. Scraper les données pour chaque arrondissement
+1. Scraper les données pour chaque arrondissement et chaque date
 2. Envoyer les données au webhook
-3. Les données seront stockées dans la feuille 'RawData'
+3. Les données seront stockées dans la feuille 'RawData' ou '180DaysData'
 4. BigQuery Connector synchronisera automatiquement les données vers BigQuery
+
+---
 
 ## Structure des données
 
 ### Google Sheet (RawData)
-- ObservationDate (DATETIME)
+- ObservationDate (DATETIME, format : `YYYY-MM-DD HH:mm:ss`)
 - Arrondissement (TEXT)
 - PropertiesCount (NUMBER)
 
-### BigQuery Table
-- ObservationDate (DATETIME)
-- Arrondissement (STRING)
-- PropertiesCount (INT64)
+### Google Sheet (180DaysData)
+- arrondissement (TEXT)
+- propertiesCount (NUMBER)
+- check-in date (DATETIME, format : `YYYY-MM-DD HH:mm:ss`)
+- check-out date (DATETIME, format : `YYYY-MM-DD HH:mm:ss`)
+- scraping date (DATETIME, format : `YYYY-MM-DD HH:mm:ss`)
+
+### Exemple de ligne de données
+| ObservationDate        | Arrondissement | PropertiesCount |
+|-----------------------|----------------|----------------|
+| 2025-06-01 10:08:27   | 1              | 102            |
+
+---
+
+## Conseils & Limitations
+- Booking.com peut détecter le scraping massif : privilégier un parallélisme raisonnable (5 à 10).
+- Les données sont envoyées en temps réel à Google Sheets, attention aux quotas Google Apps Script.
+- Pour une intégration BigQuery sans erreur, toutes les dates doivent être au format `YYYY-MM-DD HH:mm:ss`.
+
+---
+
+## Licence
+
+Usage privé ou adaptation open source selon vos besoins. (Aucune licence explicite fournie dans ce dépôt.)
+
+---
 
 ## Support
 
