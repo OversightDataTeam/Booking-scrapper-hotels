@@ -33,12 +33,33 @@ function formatDate(dateString) {
   return `${day}/${month}/${year}`;
 }
 
+function formatDateTime(dateString) {
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${day}-${month}-${year} ${hours}:${minutes}`;
+}
+
+function formatDateTimeForBigQuery(dateString) {
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 async function sendToWebhook(arrondissement, propertiesCount, checkinDate, checkoutDate) {
   const data = {
     arrondissement: arrondissement.toString(),
     propertiesCount: propertiesCount,
-    checkinDate: formatDate(checkinDate),
-    checkoutDate: formatDate(checkoutDate),
+    checkinDate: formatDateTimeForBigQuery(checkinDate),
+    checkoutDate: formatDateTimeForBigQuery(checkoutDate),
     scrapingDate: getCurrentDateTime()
   };
 
@@ -57,7 +78,7 @@ async function sendToWebhook(arrondissement, propertiesCount, checkinDate, check
     });
     
     console.log(
-      `[${arrondissement}e] ✅ ${propertiesCount} properties | ${formatDate(checkinDate)} → ${formatDate(checkoutDate)} | Webhook: ${response?.status || 'N/A'}`
+      `[${arrondissement}e] ✅ ${propertiesCount} properties | ${formatDateTime(checkinDate)} → ${formatDateTime(checkoutDate)} | Webhook: ${response?.status || 'N/A'}`
     );
     
     // Vérifier si la réponse contient une erreur
@@ -150,7 +171,7 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
 
   } catch (error) {
     console.log(
-      `[${arrondissement}e] ❌ ERROR | ${formatDate(checkinDate)} → ${formatDate(checkoutDate)} | ${error.message}`
+      `[${arrondissement}e] ❌ ERROR | ${formatDateTime(checkinDate)} → ${formatDateTime(checkoutDate)} | ${error.message}`
     );
     throw error;
   } finally {
@@ -228,8 +249,8 @@ function generateDates() {
 
 // Function to scrape all arrondissements for a specific date
 async function scrapeAllArrondissementsForDate(checkinDate, checkoutDate) {
-  console.log(`\n🔄 Starting scraping for all arrondissements (5 en parallèle) pour les dates ${checkinDate} à ${checkoutDate}`);
-  const limit = pLimit(5); // Limite à 5 arrondissements en parallèle
+  console.log(`\n🔄 Starting scraping for all arrondissements (10 en parallèle) pour les dates ${checkinDate} à ${checkoutDate}`);
+  const limit = pLimit(10); // Limite à 10 arrondissements en parallèle
   const tasks = arrondissements.map(arrondissement =>
     limit(async () => {
       const url = generateBookingUrl(arrondissement, checkinDate, checkoutDate);
@@ -248,12 +269,13 @@ async function scrapeAllArrondissementsForDate(checkinDate, checkoutDate) {
 // Initialize scraping process
 async function main() {
   try {
-    const today = new Date();
-    const checkin = today.toISOString().split('T')[0];
-    const checkout = new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-    console.log(`\n[${new Date().toISOString()}] Processing dates: ${checkin} to ${checkout}`);
-    await scrapeAllArrondissementsForDate(checkin, checkout);
+    const dates = generateDates(); // 180 paires de dates
+    for (const datePair of dates) {
+      console.log(`\n[${new Date().toISOString()}] Processing dates: ${datePair.checkin} to ${datePair.checkout}`);
+      await scrapeAllArrondissementsForDate(datePair.checkin, datePair.checkout);
+      // Optionnel : attendre 2 secondes entre chaque date
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
     console.log('\nScraping completed successfully!');
   } catch (error) {
     console.error('Error in main process:', error);
