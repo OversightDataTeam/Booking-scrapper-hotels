@@ -43,9 +43,7 @@ async function sendToWebhook(arrondissement, propertiesCount, checkinDate, check
   };
 
   try {
-    // Ajouter un délai court entre 2 et 5 secondes
-    const delay = Math.floor(Math.random() * 3000) + 2000;
-    console.log(`⏳ Waiting ${delay}ms before sending data for arrondissement ${arrondissement}...`);
+    const delay = 200; // 200 ms seulement
     await new Promise(resolve => setTimeout(resolve, delay));
 
     const response = await axios.post(WEBHOOK_URL, data, {
@@ -58,12 +56,9 @@ async function sendToWebhook(arrondissement, propertiesCount, checkinDate, check
       }
     });
     
-    console.log(`💾 Sent data for arrondissement ${arrondissement}:`);
-    console.log(`   Properties: ${propertiesCount}`);
-    console.log(`   Check-in: ${data.checkinDate}`);
-    console.log(`   Check-out: ${data.checkoutDate}`);
-    console.log(`   Scraping date: ${data.scrapingDate}`);
-    console.log(`📡 Webhook response:`, response.data);
+    console.log(
+      `[${arrondissement}e] ✅ ${propertiesCount} properties | ${formatDate(checkinDate)} → ${formatDate(checkoutDate)} | Webhook: ${response?.status || 'N/A'}`
+    );
     
     // Vérifier si la réponse contient une erreur
     if (response.data && response.data.error) {
@@ -82,36 +77,10 @@ async function sendToWebhook(arrondissement, propertiesCount, checkinDate, check
   }
 }
 
-async function waitForHotelCards(page) {
-  console.log('🔍 Waiting for hotel cards to load...');
-  
-  // Try different possible selectors
-  const selectors = [
-    '[data-testid="property-card"]',
-    '.sr_property_block',
-    '.sr-card',
-    '[data-testid="title-link"]',
-    '.sr-hotel__row'
-  ];
-
-  for (const selector of selectors) {
-    try {
-      console.log(`Trying selector: ${selector}`);
-      await page.waitForSelector(selector, { timeout: 10000 });
-      console.log(`✅ Found cards with selector: ${selector}`);
-      return selector;
-    } catch (error) {
-      console.log(`❌ Selector ${selector} not found, trying next...`);
-    }
-  }
-
-  throw new Error('No hotel card selectors found');
-}
-
 async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate) {
-  console.log(`🚀 Starting scraping process for ${arrondissement}e arrondissement...`);
-  console.log(`📝 Target URL: ${url}`);
-  console.log(`📅 Dates - Check-in: ${checkinDate}, Check-out: ${checkoutDate}`);
+  console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  console.log(`🏙️  [${arrondissement}e] Scraping: ${checkinDate} → ${checkoutDate}`);
+  console.log(`URL: ${url}`);
 
   const browser = await puppeteer.launch({
     headless: "new",
@@ -131,16 +100,22 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
     // Set user agent to avoid detection
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 
-    console.log('🌐 Navigating to:', url);
-    await page.goto(url, { 
-      waitUntil: 'networkidle0',
-      timeout: 60000 
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
+        req.abort();
+      } else {
+        req.continue();
+      }
     });
+
+    console.log('🌐 Navigating to:', url);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
     console.log('🌐 Current URL:', await page.url());
     
     // Add a delay to ensure the page is fully loaded
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Log the page content for debugging
     const pageContent = await page.content();
@@ -155,10 +130,7 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
     console.log('🔍 Tous les h1 récupérés :', h1Contents);
 
     // Wait for the title element that contains the number of properties
-    await page.waitForSelector('h1', { 
-      timeout: 30000,
-      visible: true 
-    });
+    await page.waitForSelector('h1', { timeout: 5000, visible: true });
 
     // Extract the number of properties from the title
     const propertiesCount = await page.evaluate(() => {
@@ -177,7 +149,9 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
     return propertiesCount;
 
   } catch (error) {
-    console.error(`❌ Error occurred for ${arrondissement}e arrondissement:`, error);
+    console.log(
+      `[${arrondissement}e] ❌ ERROR | ${formatDate(checkinDate)} → ${formatDate(checkoutDate)} | ${error.message}`
+    );
     throw error;
   } finally {
     await browser.close();
@@ -255,37 +229,28 @@ function generateDates() {
 // Function to scrape all arrondissements for a specific date
 async function scrapeAllArrondissementsForDate(checkinDate, checkoutDate) {
   console.log(`\n🔄 Starting scraping for all arrondissements in parallel for dates ${checkinDate} to ${checkoutDate}`);
-  
-  const promises = arrondissements.map(arrondissement => {
-    console.log(`🏙️ Initializing scraping for ${arrondissement}e arrondissement...`);
+  const tasks = arrondissements.map(async (arrondissement) => {
     const url = generateBookingUrl(arrondissement, checkinDate, checkoutDate);
-    return scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate);
+    try {
+      await scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate);
+      console.log(`✅ Completed scraping for ${arrondissement}e arrondissement for dates ${checkinDate} to ${checkoutDate}`);
+    } catch (error) {
+      console.error(`❌ Error scraping ${arrondissement}e arrondissement:`, error);
+    }
   });
-
-  try {
-    await Promise.all(promises);
-    console.log(`✅ Completed scraping for all arrondissements for dates ${checkinDate} to ${checkoutDate}\n`);
-  } catch (error) {
-    console.error(`❌ Error in scraping:`, error);
-  }
+  await Promise.all(tasks);
+  console.log(`✅ Completed scraping for all arrondissements for dates ${checkinDate} to ${checkoutDate}\n`);
 }
 
 // Initialize scraping process
 async function main() {
   try {
-    const dates = generateDates();
-    console.log(`Generated ${dates.length} date pairs`);
-    
-    const limit = pLimit(3); // Limite à 3 dates en parallèle
-    const dateTasks = dates.map(datePair =>
-      limit(async () => {
-        console.log(`\n[${new Date().toISOString()}] Processing dates: ${datePair.checkin} to ${datePair.checkout}`);
-        await scrapeAllArrondissementsForDate(datePair.checkin, datePair.checkout);
-        // Délai réduit pour aller plus vite
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      })
-    );
-    await Promise.all(dateTasks);
+    const today = new Date();
+    const checkin = today.toISOString().split('T')[0];
+    const checkout = new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    console.log(`\n[${new Date().toISOString()}] Processing dates: ${checkin} to ${checkout}`);
+    await scrapeAllArrondissementsForDate(checkin, checkout);
     console.log('\nScraping completed successfully!');
   } catch (error) {
     console.error('Error in main process:', error);
