@@ -1,8 +1,64 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const pLimit = require('p-limit');
+const {BigQuery} = require('@google-cloud/bigquery');
 puppeteer.use(StealthPlugin());
 const axios = require('axios');
+
+// BigQuery configuration
+const bigquery = new BigQuery({
+  projectId: 'oversight-datalake',
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
+});
+
+// Vérifier les credentials
+console.log('🔑 Checking BigQuery credentials...');
+console.log('Project ID:', bigquery.projectId);
+console.log('Credentials path:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
+// Vérifier si le fichier de credentials existe
+const fs = require('fs');
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  try {
+    const stats = fs.statSync(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    console.log('✅ Credentials file exists, size:', stats.size, 'bytes');
+  } catch (error) {
+    console.error('❌ Credentials file not found:', error.message);
+  }
+}
+
+const datasetId = 'MarketData';
+const tableId = 'Arrondissement';
+
+// Schéma de la table
+const schema = {
+  fields: [
+    {name: 'ObservationDate', type: 'DATETIME', mode: 'NULLABLE'},
+    {name: 'Arrondissement', type: 'STRING', mode: 'NULLABLE'},
+    {name: 'CheckinDate', type: 'DATETIME', mode: 'NULLABLE'},
+    {name: 'PropertiesCount', type: 'INTEGER', mode: 'NULLABLE'},
+    {name: 'CheckoutDate', type: 'DATETIME', mode: 'NULLABLE'}
+  ]
+};
+
+// Créer la table si elle n'existe pas
+async function ensureTableExists() {
+  try {
+    const dataset = bigquery.dataset(datasetId);
+    const [exists] = await dataset.table(tableId).exists();
+    
+    if (!exists) {
+      console.log(`📊 Creating table ${datasetId}.${tableId}...`);
+      await dataset.createTable(tableId, {
+        schema: schema
+      });
+      console.log(`✅ Table ${datasetId}.${tableId} created successfully`);
+    }
+  } catch (error) {
+    console.error('❌ Error ensuring table exists:', error.message);
+    throw error;
+  }
+}
 
 // Webhook configuration
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzcZasnLmEpMTWYu6afYZqAketTr7j4plp0xvCRdykVU1qu9pMxRTJb27-xahGZDlwI/exec';
@@ -98,6 +154,42 @@ async function sendToWebhook(arrondissement, propertiesCount, checkinDate, check
   }
 }
 
+async function insertIntoBigQuery(arrondissement, propertiesCount, checkinDate, checkoutDate) {
+  const now = new Date();
+  const formattedDate = now.toISOString().replace('T', ' ').replace('Z', '');
+  const formattedCheckin = new Date(checkinDate).toISOString().replace('T', ' ').replace('Z', '');
+  const formattedCheckout = new Date(checkoutDate).toISOString().replace('T', ' ').replace('Z', '');
+  
+  const rows = [{
+    ObservationDate: formattedDate,
+    Arrondissement: arrondissement.toString(),
+    CheckinDate: formattedCheckin,
+    PropertiesCount: parseInt(propertiesCount),
+    CheckoutDate: formattedCheckout
+  }];
+  
+  try {
+    console.log('📝 Attempting to insert data:', JSON.stringify(rows, null, 2));
+    
+    await bigquery
+      .dataset(datasetId)
+      .table(tableId)
+      .insert(rows);
+      
+    console.log(`💾 Inserted data for arrondissement ${arrondissement} with ${propertiesCount} properties`);
+  } catch (error) {
+    console.error('❌ Error inserting data to BigQuery:', error.message);
+    if (error.errors) {
+      console.error('BigQuery errors:', JSON.stringify(error.errors, null, 2));
+    }
+    if (error.response) {
+      console.error('API Response:', JSON.stringify(error.response, null, 2));
+    }
+    // Ne pas throw l'erreur pour continuer le scraping même si l'insertion échoue
+    return null;
+  }
+}
+
 async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate) {
   console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
   console.log(`🏙️  [${arrondissement}e] Scraping: ${checkinDate} → ${checkoutDate}`);
@@ -164,8 +256,8 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
 
     console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
 
-    // Send data to webhook
-    await sendToWebhook(arrondissement, propertiesCount, checkinDate, checkoutDate);
+    // Insert data into BigQuery
+    await insertIntoBigQuery(arrondissement, propertiesCount, checkinDate, checkoutDate);
 
     return propertiesCount;
 
@@ -269,6 +361,9 @@ async function scrapeAllArrondissementsForDate(checkinDate, checkoutDate) {
 // Initialize scraping process
 async function main() {
   try {
+    // S'assurer que la table existe avant de commencer
+    await ensureTableExists();
+    
     const dates = generateDates(); // 180 paires de dates
     for (const datePair of dates) {
       console.log(`\n[${new Date().toISOString()}] Processing dates: ${datePair.checkin} to ${datePair.checkout}`);
