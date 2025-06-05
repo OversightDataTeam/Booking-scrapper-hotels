@@ -387,8 +387,11 @@ async function scrapeArrondissement(page, arrondissement) {
     
     try {
       // Insérer les données dans BigQuery
+      const now = new Date();
+      const formattedDate = now.toISOString().replace('T', ' ').replace('Z', '');
+      
       const rows = [{
-        ObservationDate: new Date().toISOString(),
+        ObservationDate: formattedDate,
         Arrondissement: `${arrondissement}e`,
         PropertiesCount: parseInt(propertyCount)
       }];
