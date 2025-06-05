@@ -22,9 +22,15 @@ jobs:
       
     - name: Create credentials file
       run: |
-        echo '${{ secrets.BIGQUERY_CREDENTIALS }}' > credentials.json
+        echo '${{ secrets.BIGQUERY_CREDENTIALS }}' > ./credentials.json
+        echo "Credentials file created at: $(pwd)/credentials.json"
+        ls -la
         
     - name: Run scraper
-      run: node scraper.js
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Listing files:"
+        ls -la
+        node scraper.js
       env:
-        GOOGLE_APPLICATION_CREDENTIALS: credentials.json 
+        GOOGLE_APPLICATION_CREDENTIALS: ./credentials.json 
