@@ -272,7 +272,7 @@ async function main() {
   
   try {
     for (let i = 1; i <= 20; i++) {
-      await scrapeArrondissement(i);
+      await scrapeArrondissement(page, i);
       
       // Attendre entre 5 et 10 secondes entre chaque arrondissement
       const waitTime = Math.floor(Math.random() * 5000) + 5000;
@@ -289,7 +289,7 @@ async function main() {
 // Start the scraping process
 main(); 
 
-async function scrapeArrondissement(arrondissement) {
+async function scrapeArrondissement(page, arrondissement) {
   console.log(`🚀 Starting scraping process for ${arrondissement}e arrondissement...`);
   
   const url = `https://www.booking.com/searchresults.en-gb.html?ss=${arrondissement}e+Arrondissement%2C+Parijs%2C+Ile+de+France%2C+Frankrijk&ssne=Paris&ssne_untouched=Paris&label=gen173nr-1BCAEoggI46AdIM1gEaGyIAQGYAQm4AQfIAQzYAQHoAQGIAgGoAgO4Ar7Hvr8GwAIB0gIkOGIyNGEwNTAtMDk2Yy00ZWI4LWIzZjYtMTMwZDczODU0MzM12AIF4AIB&sid=2077e49c9dfef2d8cef83f8cf65103b6&aid=304142&lang=en-gb&sb=1&src_elem=sb&src=searchresults&dest_id=${arrondissement}&dest_type=district&ac_position=1&ac_click_type=b&ac_langcode=nl&ac_suggestion_list_length=4&search_selected=true&checkin=2025-12-02&checkout=2025-12-03&group_adults=2&no_rooms=1&group_children=0&nflt=ht_id%3D204`;
