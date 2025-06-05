@@ -25,8 +25,17 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y chromium-browser
         
+    - name: Create credentials file
+      run: |
+        echo '${{ toJSON(secrets.BIGQUERY_CREDENTIALS) }}' > credentials.json
+        cat credentials.json
+      env:
+        BIGQUERY_CREDENTIALS: ${{ secrets.BIGQUERY_CREDENTIALS }}
+        
     - name: Run scraper
       run: node scraper.js
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: credentials.json
         
     - name: Configure Git
       run: |
