@@ -333,7 +333,7 @@ function generateDates() {
 
 async function scrapeAllArrondissements() {
   const arrondissements = Array.from({length: 20}, (_, i) => i + 1);
-  const limit = pLimit(5); // Réduire à 5 instances simultanées
+  const limit = pLimit(10); // Augmenter à 10 instances simultanées
   
   const dates = generateDates(); // 180 paires de dates
   
@@ -343,8 +343,8 @@ async function scrapeAllArrondissements() {
     const promises = arrondissements.map(arrondissement => {
       return limit(async () => {
         try {
-          // Augmenter le délai aléatoire entre les requêtes
-          await new Promise(r => setTimeout(r, Math.random() * 10000 + 5000)); // 5-15 secondes
+          // Réduire légèrement le délai aléatoire entre les requêtes
+          await new Promise(r => setTimeout(r, Math.random() * 8000 + 3000)); // 3-11 secondes
           const count = await scrapeBookingHotels(arrondissement, datePair.checkin, datePair.checkout);
           console.log(`✅ Completed scraping for ${arrondissement}e arrondissement for dates ${datePair.checkin} to ${datePair.checkout}`);
           return count;
@@ -356,8 +356,8 @@ async function scrapeAllArrondissements() {
     });
 
     await Promise.all(promises);
-    // Attendre plus longtemps entre chaque date
-    await new Promise(resolve => setTimeout(resolve, 5000)); // 5 secondes
+    // Réduire légèrement le délai entre chaque date
+    await new Promise(resolve => setTimeout(resolve, 3000)); // 3 secondes
   }
 }
 
