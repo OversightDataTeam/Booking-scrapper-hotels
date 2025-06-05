@@ -393,7 +393,7 @@ async function scrapeArrondissement(page, arrondissement) {
         PropertiesCount: parseInt(propertyCount)
       }];
       
-      console.log('📝 Attempting to insert data:', rows);
+      console.log('📝 Attempting to insert data:', JSON.stringify(rows, null, 2));
       
       await bigquery
         .dataset(datasetId)
@@ -404,7 +404,10 @@ async function scrapeArrondissement(page, arrondissement) {
     } catch (bigQueryError) {
       console.error(`❌ BigQuery Error for arrondissement ${arrondissement}:`, bigQueryError.message);
       if (bigQueryError.errors) {
-        console.error('Detailed errors:', bigQueryError.errors);
+        console.error('Detailed errors:', JSON.stringify(bigQueryError.errors, null, 2));
+      }
+      if (bigQueryError.response) {
+        console.error('API Response:', JSON.stringify(bigQueryError.response, null, 2));
       }
       throw bigQueryError;
     }
