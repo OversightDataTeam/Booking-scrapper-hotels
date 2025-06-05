@@ -296,7 +296,8 @@ function generateBookingUrl(arrondissement, checkinDate, checkoutDate) {
     checkout: checkoutDate,
     group_adults: '2',
     no_rooms: '1',
-    group_children: '0'
+    group_children: '0',
+    nflt: 'ht_id%3D204'  // Filtre pour n'afficher que les hôtels
   };
 
   const queryString = Object.entries(params)
