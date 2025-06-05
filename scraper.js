@@ -12,6 +12,34 @@ const bigquery = new BigQuery({
 const datasetId = 'MarketData';
 const tableId = 'ArrondissementSummary';
 
+// Schéma de la table
+const schema = {
+  fields: [
+    {name: 'ObservationDate', type: 'DATETIME', mode: 'NULLABLE'},
+    {name: 'Arrondissement', type: 'STRING', mode: 'NULLABLE'},
+    {name: 'PropertiesCount', type: 'INTEGER', mode: 'NULLABLE'}
+  ]
+};
+
+// Créer la table si elle n'existe pas
+async function ensureTableExists() {
+  try {
+    const dataset = bigquery.dataset(datasetId);
+    const [exists] = await dataset.table(tableId).exists();
+    
+    if (!exists) {
+      console.log(`📊 Creating table ${datasetId}.${tableId}...`);
+      await dataset.createTable(tableId, {
+        schema: schema
+      });
+      console.log(`✅ Table ${datasetId}.${tableId} created successfully`);
+    }
+  } catch (error) {
+    console.error('❌ Error ensuring table exists:', error.message);
+    throw error;
+  }
+}
+
 function normalizeUrl(url) {
   // Extract the hotel path from the URL
   const match = url.match(/\/hotel\/[^?]+/);
@@ -271,6 +299,9 @@ async function main() {
   await page.setDefaultTimeout(30000);
   
   try {
+    // S'assurer que la table existe avant de commencer
+    await ensureTableExists();
+    
     for (let i = 1; i <= 20; i++) {
       await scrapeArrondissement(page, i);
       
@@ -287,7 +318,7 @@ async function main() {
 }
 
 // Start the scraping process
-main(); 
+main();
 
 async function scrapeArrondissement(page, arrondissement) {
   console.log(`🚀 Starting scraping process for ${arrondissement}e arrondissement...`);
@@ -341,9 +372,9 @@ async function scrapeArrondissement(page, arrondissement) {
     try {
       // Insérer les données dans BigQuery
       const rows = [{
-        arrondissement: arrondissement,
-        property_count: parseInt(propertyCount),
-        timestamp: new Date().toISOString()
+        ObservationDate: new Date().toISOString(),
+        Arrondissement: `${arrondissement}e`,
+        PropertiesCount: parseInt(propertyCount)
       }];
       
       console.log('📝 Attempting to insert data:', rows);
@@ -359,7 +390,7 @@ async function scrapeArrondissement(page, arrondissement) {
       if (bigQueryError.errors) {
         console.error('Detailed errors:', bigQueryError.errors);
       }
-      throw bigQueryError; // Re-throw pour être capturé par le try/catch externe
+      throw bigQueryError;
     }
     
   } catch (error) {
