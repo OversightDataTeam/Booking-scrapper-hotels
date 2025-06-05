@@ -6,7 +6,7 @@ const {BigQuery} = require('@google-cloud/bigquery');
 // BigQuery configuration
 const bigquery = new BigQuery({
   projectId: 'oversight-datalake',
-  keyFilename: './credentials.json'
+  credentials: JSON.parse(process.env.BIGQUERY_CREDENTIALS || '{}')
 });
 
 const datasetId = 'MarketData';
