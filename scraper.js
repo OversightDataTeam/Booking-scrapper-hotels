@@ -165,14 +165,12 @@ async function scrapeBookingHotels(url, arrondissement) {
       '--window-size=1920,1080',
       '--disable-web-security',
       '--disable-features=IsolateOrigins,site-per-process',
-      '--incognito'  // Forcer le mode incognito au niveau du navigateur
+      '--incognito'
     ]
   });
 
   try {
-    // Créer un nouveau contexte incognito
-    const context = await browser.createIncognitoBrowserContext();
-    const page = await context.newPage();
+    const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
 
     // Set user agent to avoid detection
@@ -182,11 +180,8 @@ async function scrapeBookingHotels(url, arrondissement) {
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
       window.chrome = { runtime: {} };
-      // Supprimer le localStorage
       localStorage.clear();
-      // Supprimer le sessionStorage
       sessionStorage.clear();
-      // Supprimer les cookies
       document.cookie.split(";").forEach(function(c) { 
         document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
       });
@@ -202,6 +197,17 @@ async function scrapeBookingHotels(url, arrondissement) {
       waitUntil: 'networkidle0',
       timeout: 60000 
     });
+
+    // Nettoyer l'URL des paramètres de date
+    const currentUrl = await page.url();
+    const urlWithoutDates = currentUrl.replace(/&checkin=\d{4}-\d{2}-\d{2}&checkout=\d{4}-\d{2}-\d{2}/, '');
+    if (currentUrl !== urlWithoutDates) {
+      console.log('🔄 Nettoyage de l\'URL des dates...');
+      await page.goto(urlWithoutDates, { 
+        waitUntil: 'networkidle0',
+        timeout: 60000 
+      });
+    }
 
     console.log('🌐 Current URL:', await page.url());
     
@@ -229,16 +235,12 @@ async function scrapeBookingHotels(url, arrondissement) {
     // Extract the number of properties from the title
     const propertiesCount = await page.evaluate(() => {
       const h1s = Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim());
-      // Log explicitement les h1 dans le contexte navigateur
       console.log('🔍 [browser context] h1s:', h1s);
       const match = h1s.map(title => title.match(/(\d+)\s+(?:properties|établissements?|exact matches?)\s+(?:found|trouvés)/i)).find(Boolean);
       return match ? parseInt(match[1]) : 0;
     });
 
     console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
-
-    // Insert data into BigQuery
-    await insertIntoBigQuery(arrondissement, propertiesCount);
 
     return propertiesCount;
 
@@ -251,26 +253,12 @@ async function scrapeBookingHotels(url, arrondissement) {
 }
 
 function generateBookingUrl(arrondissement) {
-  // URL exacte de Booking.com
+  // URL minimale de Booking.com
   const baseUrl = 'https://www.booking.com/searchresults.en-gb.html';
   const params = {
-    label: 'gen173nr-1BCAEoggI46AdIM1gEaGyIAQGYAQm4AQfIAQzYAQHoAQGIAgGoAgO4Ar7Hvr8GwAIB0gIkOGIyNGEwNTAtMDk2Yy00ZWI4LWIzZjYtMTMwZDczODU0MzM12AIF4AIB',
-    sid: '2077e49c9dfef2d8cef83f8cf65103b6',
-    aid: '304142',
     ss: `${arrondissement}e+arr.%2C+Paris%2C+Ile+de+France%2C+France`,
-    ssne: `${arrondissement + 1}e+arr.`,
-    ssne_untouched: `${arrondissement + 1}e+arr.`,
-    efdco: '1',
-    lang: 'en-gb',
-    src: 'searchresults',
     dest_id: arrondissement.toString(),
     dest_type: 'district',
-    ac_position: '0',
-    ac_click_type: 'b',
-    ac_langcode: 'en',
-    ac_suggestion_list_length: '5',
-    search_selected: 'true',
-    search_pageview_id: '7c1753f25af00790',
     group_adults: '2',
     no_rooms: '1',
     group_children: '0',
@@ -286,151 +274,29 @@ function generateBookingUrl(arrondissement) {
   };
 }
 
-// Array of arrondissements to scrape
-const arrondissements = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
-
-// Function to scrape all arrondissements
-async function scrapeAllArrondissements() {
-  for (const arrondissement of arrondissements) {
-    const bookingData = generateBookingUrl(arrondissement);
-    try {
-      await scrapeBookingHotels(bookingData.url, arrondissement);
-      console.log(`✅ Terminé pour le ${arrondissement}e arrondissement`);
-      
-      // Attendre entre 5 et 10 secondes entre chaque arrondissement
-      const waitTime = Math.floor(Math.random() * 5000) + 5000;
-      console.log(`⏳ Waiting ${waitTime}ms before next arrondissement...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    } catch (error) {
-      console.error(`❌ Erreur pour le ${arrondissement}e arrondissement:`, error);
-    }
-  }
-  console.log('✅ Scraping terminé pour tous les arrondissements');
-}
-
-// Initialize scraping process
+// Scraper tous les arrondissements de 1 à 20
 async function main() {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  
-  const page = await browser.newPage();
-  
-  // Configurer le user agent
-  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-  
-  // Configurer les timeouts
-  await page.setDefaultNavigationTimeout(60000);
-  await page.setDefaultTimeout(30000);
-  
   try {
     // S'assurer que la table existe avant de commencer
     await ensureTableExists();
     
-    for (let i = 1; i <= 20; i++) {
-      await scrapeArrondissement(page, i);
+    for (let arrondissement = 1; arrondissement <= 20; arrondissement++) {
+      const bookingData = generateBookingUrl(arrondissement);
+      const propertiesCount = await scrapeBookingHotels(bookingData.url, arrondissement);
       
-      // Attendre entre 5 et 10 secondes entre chaque arrondissement
-      const waitTime = Math.floor(Math.random() * 5000) + 5000;
+      // Insérer les données dans BigQuery
+      await insertIntoBigQuery(arrondissement, propertiesCount);
+      
+      // Délai aléatoire entre 3 et 7 secondes
+      const waitTime = Math.floor(Math.random() * 4000) + 3000;
       console.log(`⏳ Waiting ${waitTime}ms before next arrondissement...`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
+    console.log('✅ Scraping terminé pour tous les arrondissements');
   } catch (error) {
     console.error('❌ Error in main process:', error);
-  } finally {
-    await browser.close();
   }
 }
 
 // Start the scraping process
 main(); 
-
-async function scrapeArrondissement(page, arrondissement) {
-  console.log(`🚀 Starting scraping process for ${arrondissement}e arrondissement...`);
-  
-  const url = `https://www.booking.com/searchresults.en-gb.html?ss=${arrondissement}e+Arrondissement%2C+Parijs%2C+Ile+de+France%2C+Frankrijk&ssne=Paris&ssne_untouched=Paris&label=gen173nr-1BCAEoggI46AdIM1gEaGyIAQGYAQm4AQfIAQzYAQHoAQGIAgGoAgO4Ar7Hvr8GwAIB0gIkOGIyNGEwNTAtMDk2Yy00ZWI4LWIzZjYtMTMwZDczODU0MzM12AIF4AIB&sid=2077e49c9dfef2d8cef83f8cf65103b6&aid=304142&lang=en-gb&sb=1&src_elem=sb&src=searchresults&dest_id=${arrondissement}&dest_type=district&ac_position=1&ac_click_type=b&ac_langcode=nl&ac_suggestion_list_length=4&search_selected=true&checkin=2025-12-02&checkout=2025-12-03&group_adults=2&no_rooms=1&group_children=0&nflt=ht_id%3D204`;
-  
-  console.log(`📝 Target URL: ${url}`);
-  console.log(`📅 Dates - Check-in: 2025-12-02, Check-out: 2025-12-03`);
-  
-  try {
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
-    console.log(`🌐 Current URL: ${page.url()}`);
-    
-    // Vérifier si on est bloqué
-    const content = await page.content();
-    if (content.includes('bot detection') || content.includes('access denied')) {
-      console.log('⚠️ Bot detection active, skipping this arrondissement');
-      return;
-    }
-    
-    // Attendre que le contenu soit chargé
-    await page.waitForSelector('h1', { timeout: 10000 });
-    
-    // Récupérer tous les h1
-    const h1Elements = await page.$$eval('h1', elements => elements.map(el => el.textContent));
-    console.log(`🔍 Tous les h1 récupérés :`, h1Elements);
-    
-    // Extraire le nombre de propriétés
-    const h1Text = h1Elements[0];
-    let propertyCount = '0';
-    
-    // Gérer différents formats de texte
-    if (h1Text.includes('arr.:')) {
-      propertyCount = h1Text.match(/arr\.:\s*(\d+)/)?.[1] || '0';
-    } else if (h1Text.includes('exact matches')) {
-      propertyCount = h1Text.match(/(\d+)\s+exact matches/)?.[1] || '0';
-    } else if (h1Text.includes('properties found')) {
-      propertyCount = h1Text.match(/(\d+)\s+properties found/)?.[1] || '0';
-    } else {
-      // Fallback : chercher n'importe quel nombre dans le texte
-      propertyCount = h1Text.match(/(\d+)/)?.[1] || '0';
-    }
-    
-    console.log(`📊 Found ${propertyCount} properties in ${arrondissement}e arrondissement`);
-    
-    // Attendre un peu avant d'insérer les données
-    const waitTime = Math.floor(Math.random() * 2000) + 3000;
-    console.log(`⏳ Waiting ${waitTime}ms before inserting data for arrondissement ${arrondissement}...`);
-    await new Promise(resolve => setTimeout(resolve, waitTime));
-    
-    try {
-      // Insérer les données dans BigQuery
-      const now = new Date();
-      const formattedDate = now.toISOString().replace('T', ' ').replace('Z', '');
-      
-      const rows = [{
-        ObservationDate: formattedDate,
-        Arrondissement: arrondissement.toString(),
-        PropertiesCount: parseInt(propertyCount)
-      }];
-      
-      console.log('📝 Attempting to insert data:', JSON.stringify(rows, null, 2));
-      
-      await bigquery
-        .dataset(datasetId)
-        .table(tableId)
-        .insert(rows);
-        
-      console.log(`💾 Inserted data for arrondissement ${arrondissement} with ${propertyCount} properties at ${new Date().toLocaleString()}`);
-    } catch (bigQueryError) {
-      console.error(`❌ BigQuery Error for arrondissement ${arrondissement}:`, bigQueryError.message);
-      if (bigQueryError.errors) {
-        console.error('Detailed errors:', JSON.stringify(bigQueryError.errors, null, 2));
-      }
-      if (bigQueryError.response) {
-        console.error('API Response:', JSON.stringify(bigQueryError.response, null, 2));
-      }
-      throw bigQueryError;
-    }
-    
-  } catch (error) {
-    console.error(`❌ Error scraping arrondissement ${arrondissement}:`, error.message);
-    if (error.stack) {
-      console.error('Stack trace:', error.stack);
-    }
-  }
-  
-  console.log(`✅ Terminé pour le ${arrondissement}e arrondissement`);
-} 
