@@ -164,11 +164,13 @@ async function scrapeBookingHotels(url, arrondissement) {
       '--disable-gpu',
       '--window-size=1920,1080',
       '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process'
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--incognito'  // Forcer le mode incognito au niveau du navigateur
     ]
   });
 
   try {
+    // Créer un nouveau contexte incognito
     const context = await browser.createIncognitoBrowserContext();
     const page = await context.newPage();
     page.setDefaultNavigationTimeout(60000);
@@ -176,11 +178,24 @@ async function scrapeBookingHotels(url, arrondissement) {
     // Set user agent to avoid detection
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 
-    // Supprimer tous les cookies
+    // Supprimer tous les cookies et le cache
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
       window.chrome = { runtime: {} };
+      // Supprimer le localStorage
+      localStorage.clear();
+      // Supprimer le sessionStorage
+      sessionStorage.clear();
+      // Supprimer les cookies
+      document.cookie.split(";").forEach(function(c) { 
+        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+      });
     });
+
+    // Supprimer les cookies via CDP
+    const client = await page.target().createCDPSession();
+    await client.send('Network.clearBrowserCookies');
+    await client.send('Network.clearBrowserCache');
 
     console.log('🌐 Navigating to:', url);
     await page.goto(url, { 
