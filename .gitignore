@@ -4,9 +4,16 @@ node_modules/
 # Environment variables
 .env
 
+# Credentials
+credentials.json
+
 # Logs
 *.log
 npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Runtime data
 pids

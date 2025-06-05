@@ -1,10 +1,16 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 puppeteer.use(StealthPlugin());
-const axios = require('axios');
+const {BigQuery} = require('@google-cloud/bigquery');
 
-// Webhook configuration
-const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzcZasnLmEpMTWYu6afYZqAketTr7j4plp0xvCRdykVU1qu9pMxRTJb27-xahGZDlwI/exec';
+// BigQuery configuration
+const bigquery = new BigQuery({
+  projectId: 'oversight-datalake',
+  keyFilename: './credentials.json'
+});
+
+const datasetId = 'MarketData';
+const tableId = 'ArrondissementSummary';
 
 function normalizeUrl(url) {
   // Extract the hotel path from the URL
@@ -38,50 +44,37 @@ function getCurrentDateTime() {
   return `${day}-${month}-${year} ${hours}:${minutes}`;
 }
 
-async function sendToWebhook(arrondissement, propertiesCount) {
+async function insertIntoBigQuery(arrondissement, propertiesCount) {
   const now = new Date();
-  const date = now.toISOString().split('T')[0]; // Format YYYY-MM-DD
-  const timestamp = now.toISOString(); // Format ISO avec millisecondes
+  // Format DATETIME pour BigQuery (YYYY-MM-DD HH:mm:ss)
+  const observationDate = now.toISOString().replace('T', ' ').split('.')[0];
 
-  const data = {
-    arrondissement,
-    properties_count: propertiesCount,
-    date,
-    timestamp: timestamp
-  };
+  const rows = [{
+    ObservationDate: observationDate,
+    Arrondissement: arrondissement.toString(),
+    PropertiesCount: propertiesCount
+  }];
 
   try {
     // Ajouter un délai court entre 2 et 5 secondes
     const delay = Math.floor(Math.random() * 3000) + 2000;
-    console.log(`⏳ Waiting ${delay}ms before sending data for arrondissement ${arrondissement}...`);
+    console.log(`⏳ Waiting ${delay}ms before inserting data for arrondissement ${arrondissement}...`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
-    const response = await axios.post(WEBHOOK_URL, data, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      // Important pour Google Apps Script
-      params: {
-        'callback': 'callback'
-      }
-    });
+    const [job] = await bigquery
+      .dataset(datasetId)
+      .table(tableId)
+      .insert(rows);
     
-    console.log(`💾 Sent data for arrondissement ${arrondissement} with ${propertiesCount} properties at ${timestamp}`);
-    console.log(`📡 Webhook response:`, response.data);
+    console.log(`💾 Inserted data for arrondissement ${arrondissement} with ${propertiesCount} properties at ${observationDate}`);
     
-    // Vérifier si la réponse contient une erreur
-    if (response.data && response.data.error) {
-      throw new Error(response.data.error);
-    }
-    
-    return response.data;
+    return job;
   } catch (error) {
-    console.error('❌ Error sending data to webhook:', error.message);
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
+    console.error('❌ Error inserting data to BigQuery:', error.message);
+    if (error.errors) {
+      console.error('BigQuery errors:', JSON.stringify(error.errors, null, 2));
     }
-    // Ne pas throw l'erreur pour continuer le scraping même si l'envoi échoue
+    // Ne pas throw l'erreur pour continuer le scraping même si l'insertion échoue
     return null;
   }
 }
@@ -169,14 +162,14 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
       const h1s = Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim());
       // Log explicitement les h1 dans le contexte navigateur
       console.log('🔍 [browser context] h1s:', h1s);
-      const match = h1s.map(title => title.match(/(\d+)\s+(?:properties|établissements?)\s+(?:found|trouvés)/)).find(Boolean);
+      const match = h1s.map(title => title.match(/(\d+)\s+(?:properties|établissements?|exact matches?)\s+(?:found|trouvés)/i)).find(Boolean);
       return match ? parseInt(match[1]) : 0;
     });
 
     console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
 
-    // Send data to webhook
-    await sendToWebhook(arrondissement, propertiesCount);
+    // Insert data into BigQuery
+    await insertIntoBigQuery(arrondissement, propertiesCount);
 
     return propertiesCount;
 
@@ -229,7 +222,8 @@ function generateBookingUrl(arrondissement) {
     checkout: checkoutDate,
     group_adults: '2',
     no_rooms: '1',
-    group_children: '0'
+    group_children: '0',
+    nflt: 'ht_id%3D204'
   };
 
   const queryString = Object.entries(params)
