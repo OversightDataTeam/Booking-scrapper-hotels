@@ -219,77 +219,102 @@ async function scrapeBookingHotels(url, arrondissement) {
   });
 
   try {
-    const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(60000);
+    let propertiesCount = 0;
+    let retryCount = 0;
+    const maxRetries = 3;
 
-    // Set user agent to avoid detection
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+    while (propertiesCount === 0 && retryCount < maxRetries) {
+      if (retryCount > 0) {
+        console.log(`🔄 Retry #${retryCount} for arrondissement ${arrondissement}...`);
+        // Attendre un peu plus longtemps entre chaque retry
+        const retryDelay = Math.floor(Math.random() * 5000) + 5000;
+        console.log(`⏳ Waiting ${retryDelay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
 
-    // Supprimer tous les cookies et le cache
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      window.chrome = { runtime: {} };
-      localStorage.clear();
-      sessionStorage.clear();
-      document.cookie.split(";").forEach(function(c) { 
-        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+      const page = await browser.newPage();
+      page.setDefaultNavigationTimeout(60000);
+
+      // Set user agent to avoid detection
+      await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+
+      // Supprimer tous les cookies et le cache
+      await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        window.chrome = { runtime: {} };
+        localStorage.clear();
+        sessionStorage.clear();
+        document.cookie.split(";").forEach(function(c) { 
+          document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+        });
       });
-    });
 
-    // Supprimer les cookies via CDP
-    const client = await page.target().createCDPSession();
-    await client.send('Network.clearBrowserCookies');
-    await client.send('Network.clearBrowserCache');
+      // Supprimer les cookies via CDP
+      const client = await page.target().createCDPSession();
+      await client.send('Network.clearBrowserCookies');
+      await client.send('Network.clearBrowserCache');
 
-    console.log('🌐 Navigating to:', url);
-    await page.goto(url, { 
-      waitUntil: 'networkidle0',
-      timeout: 60000 
-    });
-
-    // Nettoyer l'URL des paramètres de date
-    const currentUrl = await page.url();
-    const urlWithoutDates = currentUrl.replace(/&checkin=\d{4}-\d{2}-\d{2}&checkout=\d{4}-\d{2}-\d{2}/, '');
-    if (currentUrl !== urlWithoutDates) {
-      console.log('🔄 Nettoyage de l\'URL des dates...');
-      await page.goto(urlWithoutDates, { 
+      console.log('🌐 Navigating to:', url);
+      await page.goto(url, { 
         waitUntil: 'networkidle0',
         timeout: 60000 
       });
+
+      // Nettoyer l'URL des paramètres de date
+      const currentUrl = await page.url();
+      const urlWithoutDates = currentUrl.replace(/&checkin=\d{4}-\d{2}-\d{2}&checkout=\d{4}-\d{2}-\d{2}/, '');
+      if (currentUrl !== urlWithoutDates) {
+        console.log('🔄 Nettoyage de l\'URL des dates...');
+        await page.goto(urlWithoutDates, { 
+          waitUntil: 'networkidle0',
+          timeout: 60000 
+        });
+      }
+
+      console.log('🌐 Current URL:', await page.url());
+      
+      // Add a delay to ensure the page is fully loaded
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Log the page content for debugging
+      const pageContent = await page.content();
+      const pageContentLower = pageContent.toLowerCase();
+      if (pageContentLower.includes('robot') || pageContentLower.includes('captcha') || pageContentLower.includes('access denied')) {
+        console.warn('⚠️ Possible bot detection or access denied!');
+      }
+      console.log('📄 Page content (first 500 chars):', pageContent.substring(0, 500) + '...');
+
+      // Log all h1 contents
+      const h1Contents = await page.evaluate(() => Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim()));
+      console.log('🔍 Tous les h1 récupérés :', h1Contents);
+
+      // Wait for the title element that contains the number of properties
+      await page.waitForSelector('h1', { 
+        timeout: 30000,
+        visible: true 
+      });
+
+      // Extract the number of properties from the title
+      propertiesCount = await page.evaluate(() => {
+        const h1s = Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim());
+        console.log('🔍 [browser context] h1s:', h1s);
+        const match = h1s.map(title => title.match(/(\d+)\s+(?:properties|établissements?|exact matches?)\s+(?:found|trouvés)/i)).find(Boolean);
+        return match ? parseInt(match[1]) : 0;
+      });
+
+      console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
+
+      await page.close();
+
+      if (propertiesCount === 0) {
+        retryCount++;
+        if (retryCount < maxRetries) {
+          console.log(`⚠️ No properties found, will retry (${retryCount}/${maxRetries})...`);
+        } else {
+          console.log(`❌ No properties found after ${maxRetries} attempts`);
+        }
+      }
     }
-
-    console.log('🌐 Current URL:', await page.url());
-    
-    // Add a delay to ensure the page is fully loaded
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    // Log the page content for debugging
-    const pageContent = await page.content();
-    const pageContentLower = pageContent.toLowerCase();
-    if (pageContentLower.includes('robot') || pageContentLower.includes('captcha') || pageContentLower.includes('access denied')) {
-      console.warn('⚠️ Possible bot detection or access denied!');
-    }
-    console.log('📄 Page content (first 500 chars):', pageContent.substring(0, 500) + '...');
-
-    // Log all h1 contents
-    const h1Contents = await page.evaluate(() => Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim()));
-    console.log('🔍 Tous les h1 récupérés :', h1Contents);
-
-    // Wait for the title element that contains the number of properties
-    await page.waitForSelector('h1', { 
-      timeout: 30000,
-      visible: true 
-    });
-
-    // Extract the number of properties from the title
-    const propertiesCount = await page.evaluate(() => {
-      const h1s = Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim());
-      console.log('🔍 [browser context] h1s:', h1s);
-      const match = h1s.map(title => title.match(/(\d+)\s+(?:properties|établissements?|exact matches?)\s+(?:found|trouvés)/i)).find(Boolean);
-      return match ? parseInt(match[1]) : 0;
-    });
-
-    console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
 
     return propertiesCount;
 
