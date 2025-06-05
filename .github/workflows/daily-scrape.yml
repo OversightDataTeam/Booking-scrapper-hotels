@@ -27,7 +27,7 @@ jobs:
         
     - name: Create credentials file
       run: |
-        echo '${{ secrets.BIGQUERY_CREDENTIALS }}' | jq '.' > credentials.json
+        echo '${{ secrets.BIGQUERY_CREDENTIALS }}' | sed 's/%$//' | jq '.' > credentials.json
         echo "Credentials file created:"
         cat credentials.json
       env:
