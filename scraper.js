@@ -4,25 +4,36 @@ puppeteer.use(StealthPlugin());
 const {BigQuery} = require('@google-cloud/bigquery');
 
 // BigQuery configuration
+let credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+// Si on est dans GitHub Actions, utiliser BIGQUERY_CREDENTIALS
+if (process.env.BIGQUERY_CREDENTIALS) {
+  console.log('🔧 Running in GitHub Actions environment');
+  const fs = require('fs');
+  credentialsPath = '/tmp/gcloud.json';
+  fs.writeFileSync(credentialsPath, process.env.BIGQUERY_CREDENTIALS);
+  console.log('✅ Created temporary credentials file for GitHub Actions');
+}
+
 const bigquery = new BigQuery({
   projectId: 'oversight-datalake',
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
+  keyFilename: credentialsPath
 });
 
 // Vérifier les credentials
 console.log('🔑 Checking BigQuery credentials...');
 console.log('Project ID:', bigquery.projectId);
-console.log('Credentials path:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+console.log('Credentials path:', credentialsPath);
 
 // Vérifier si le fichier de credentials existe et est valide
 const fs = require('fs');
-if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+if (credentialsPath) {
   try {
-    const stats = fs.statSync(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    const stats = fs.statSync(credentialsPath);
     console.log('✅ Credentials file exists, size:', stats.size, 'bytes');
     
     // Lire et vérifier le contenu du fichier
-    const credentials = JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'));
+    const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     if (!credentials.project_id) {
       console.error('❌ Missing project_id in credentials file');
       process.exit(1);
@@ -41,7 +52,7 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     process.exit(1);
   }
 } else {
-  console.error('❌ GOOGLE_APPLICATION_CREDENTIALS environment variable is not set');
+  console.error('❌ No credentials path found. Please set either GOOGLE_APPLICATION_CREDENTIALS or BIGQUERY_CREDENTIALS');
   process.exit(1);
 }
 
