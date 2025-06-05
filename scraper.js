@@ -9,6 +9,22 @@ const bigquery = new BigQuery({
   keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
 });
 
+// Vérifier les credentials
+console.log('🔑 Checking BigQuery credentials...');
+console.log('Project ID:', bigquery.projectId);
+console.log('Credentials path:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
+// Vérifier si le fichier de credentials existe
+const fs = require('fs');
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  try {
+    const stats = fs.statSync(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    console.log('✅ Credentials file exists, size:', stats.size, 'bytes');
+  } catch (error) {
+    console.error('❌ Credentials file not found:', error.message);
+  }
+}
+
 const datasetId = 'MarketData';
 const tableId = 'ArrondissementSummary';
 
