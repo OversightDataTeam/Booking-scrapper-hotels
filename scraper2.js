@@ -209,7 +209,7 @@ async function scrapeBookingHotels(arrondissement, checkinDate, checkoutDate) {
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080 });
-    
+
     // Augmenter les timeouts à 60 secondes
     await page.setDefaultNavigationTimeout(60000);
     await page.setDefaultTimeout(60000);
@@ -333,7 +333,7 @@ function generateDates() {
 
 async function scrapeAllArrondissements() {
   const arrondissements = Array.from({length: 20}, (_, i) => i + 1);
-  const limit = pLimit(10); // Augmenter à 10 instances simultanées
+  const limit = pLimit(15); // Augmenter à 15 instances simultanées
   
   const dates = generateDates(); // 180 paires de dates
   
@@ -343,8 +343,8 @@ async function scrapeAllArrondissements() {
     const promises = arrondissements.map(arrondissement => {
       return limit(async () => {
         try {
-          // Réduire légèrement le délai aléatoire entre les requêtes
-          await new Promise(r => setTimeout(r, Math.random() * 8000 + 3000)); // 3-11 secondes
+          // Réduire le délai aléatoire entre les requêtes
+          await new Promise(r => setTimeout(r, Math.random() * 5000 + 2000)); // 2-7 secondes
           const count = await scrapeBookingHotels(arrondissement, datePair.checkin, datePair.checkout);
           console.log(`✅ Completed scraping for ${arrondissement}e arrondissement for dates ${datePair.checkin} to ${datePair.checkout}`);
           return count;
@@ -356,8 +356,8 @@ async function scrapeAllArrondissements() {
     });
 
     await Promise.all(promises);
-    // Réduire légèrement le délai entre chaque date
-    await new Promise(resolve => setTimeout(resolve, 3000)); // 3 secondes
+    // Réduire le délai entre chaque date
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 secondes
   }
 }
 
