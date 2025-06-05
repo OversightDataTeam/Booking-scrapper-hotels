@@ -267,9 +267,7 @@ function generateBookingUrl(arrondissement) {
     .join('&');
 
   return {
-    url: `${baseUrl}?${queryString}`,
-    checkinDate: null,
-    checkoutDate: null
+    url: `${baseUrl}?${queryString}`
   };
 }
 
