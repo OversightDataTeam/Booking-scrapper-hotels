@@ -338,22 +338,35 @@ async function scrapeArrondissement(page, arrondissement) {
     console.log(`⏳ Waiting ${waitTime}ms before inserting data for arrondissement ${arrondissement}...`);
     await new Promise(resolve => setTimeout(resolve, waitTime));
     
-    // Insérer les données dans BigQuery
-    const rows = [{
-      arrondissement: arrondissement,
-      property_count: parseInt(propertyCount),
-      timestamp: new Date().toISOString()
-    }];
-    
-    await bigquery
-      .dataset(datasetId)
-      .table(tableId)
-      .insert(rows);
+    try {
+      // Insérer les données dans BigQuery
+      const rows = [{
+        arrondissement: arrondissement,
+        property_count: parseInt(propertyCount),
+        timestamp: new Date().toISOString()
+      }];
       
-    console.log(`💾 Inserted data for arrondissement ${arrondissement} with ${propertyCount} properties at ${new Date().toLocaleString()}`);
+      console.log('📝 Attempting to insert data:', rows);
+      
+      await bigquery
+        .dataset(datasetId)
+        .table(tableId)
+        .insert(rows);
+        
+      console.log(`💾 Inserted data for arrondissement ${arrondissement} with ${propertyCount} properties at ${new Date().toLocaleString()}`);
+    } catch (bigQueryError) {
+      console.error(`❌ BigQuery Error for arrondissement ${arrondissement}:`, bigQueryError.message);
+      if (bigQueryError.errors) {
+        console.error('Detailed errors:', bigQueryError.errors);
+      }
+      throw bigQueryError; // Re-throw pour être capturé par le try/catch externe
+    }
     
   } catch (error) {
     console.error(`❌ Error scraping arrondissement ${arrondissement}:`, error.message);
+    if (error.stack) {
+      console.error('Stack trace:', error.stack);
+    }
   }
   
   console.log(`✅ Terminé pour le ${arrondissement}e arrondissement`);
