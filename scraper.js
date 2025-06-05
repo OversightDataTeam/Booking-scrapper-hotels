@@ -4,9 +4,20 @@ puppeteer.use(StealthPlugin());
 const {BigQuery} = require('@google-cloud/bigquery');
 
 // BigQuery configuration
+let credentials;
+try {
+  credentials = JSON.parse(process.env.BIGQUERY_CREDENTIALS);
+  if (!credentials.client_email) {
+    throw new Error('Invalid credentials format: missing client_email');
+  }
+} catch (error) {
+  console.error('Error parsing credentials:', error.message);
+  process.exit(1);
+}
+
 const bigquery = new BigQuery({
   projectId: 'oversight-datalake',
-  credentials: JSON.parse(process.env.BIGQUERY_CREDENTIALS || '{}')
+  credentials: credentials
 });
 
 const datasetId = 'MarketData';
