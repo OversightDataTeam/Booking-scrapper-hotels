@@ -191,81 +191,69 @@ async function insertIntoBigQuery(arrondissement, propertiesCount, checkinDate, 
   }
 }
 
-async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate) {
-  console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-  console.log(`🏙️  [${arrondissement}e] Scraping: ${checkinDate} → ${checkoutDate}`);
-  console.log(`URL: ${url}`);
-
+async function scrapeBookingHotels(arrondissement, checkinDate, checkoutDate) {
   const browser = await puppeteer.launch({
-    headless: "new",
-    defaultViewport: null,
+    headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--window-size=1920,1080',
-      '--start-maximized'
-    ]
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu',
+      '--window-size=1920x1080',
+      '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    ],
+    userDataDir: `./chrome-profile-${arrondissement}` // Profil unique par arrondissement
   });
 
   try {
     const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(60000);
-
-    // Set user agent to avoid detection
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
-
-    console.log('🌐 Navigating to:', url);
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-    console.log('🌐 Current URL:', await page.url());
+    await page.setViewport({ width: 1920, height: 1080 });
     
-    // Add a delay to ensure the page is fully loaded
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Ajouter des délais aléatoires
+    const randomDelay = () => Math.floor(Math.random() * 2000) + 1000;
+    await page.setDefaultNavigationTimeout(30000); // Augmenter le timeout à 30 secondes
+    await page.setDefaultTimeout(30000);
 
-    // Log the page content for debugging
-    const pageContent = await page.content();
-    const pageContentLower = pageContent.toLowerCase();
-    if (pageContentLower.includes('robot') || pageContentLower.includes('captcha') || pageContentLower.includes('access denied')) {
-      console.warn('⚠️ Possible bot detection or access denied!');
+    const url = generateBookingUrl(arrondissement, checkinDate, checkoutDate);
+    console.log(`🌐 Navigating to: ${url}`);
+    
+    await page.goto(url, { waitUntil: 'networkidle0' });
+    await new Promise(r => setTimeout(r, randomDelay())); // Délai après le chargement
+
+    // Attendre plus longtemps pour le h1
+    const h1Selector = await page.waitForSelector('h1', { timeout: 30000 });
+    if (!h1Selector) {
+      throw new Error('Could not find h1 element');
     }
-    console.log('📄 Page content (first 500 chars):', pageContent.substring(0, 500) + '...');
 
-    // Log all h1 contents
-    const h1Contents = await page.evaluate(() => Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim()));
-    console.log('🔍 Tous les h1 récupérés :', h1Contents);
+    const h1Text = await page.$eval('h1', el => el.textContent);
+    console.log(`🔍 Tous les h1 récupérés : [ '${h1Text}' ]`);
 
-    // Wait for the title element that contains the number of properties
-    await page.waitForSelector('h1', { timeout: 5000, visible: true });
-
-    // Extract the number of properties from the title
-    const propertiesCount = await page.evaluate(() => {
-      const h1s = Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim());
-      // Log explicitement les h1 dans le contexte navigateur
-      console.log('🔍 [browser context] h1s:', h1s);
-      const match = h1s.map(title => title.match(/(\d+)\s+(?:properties|établissements?)\s+(?:found|trouvés)/)).find(Boolean);
-      return match ? parseInt(match[1]) : 0;
-    });
+    // Extraire le nombre de propriétés
+    const match = h1Text.match(/(\d+)\s+(?:properties|exact matches)/i);
+    const propertiesCount = match ? parseInt(match[1]) : 0;
 
     console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
 
-    // Insert data into BigQuery
+    // Préparer les données pour BigQuery
+    const data = [{
+      ObservationDate: new Date().toISOString().replace('Z', ''),
+      Arrondissement: arrondissement.toString(),
+      CheckinDate: checkinDate + ' 00:00:00.000',
+      PropertiesCount: propertiesCount,
+      CheckoutDate: checkoutDate + ' 00:00:00.000'
+    }];
+
+    console.log('📝 Attempting to insert data:', JSON.stringify(data, null, 2));
+
+    // Insérer dans BigQuery
     await insertIntoBigQuery(arrondissement, propertiesCount, checkinDate, checkoutDate);
+    console.log(`💾 Inserted data for arrondissement ${arrondissement} with ${propertiesCount} properties`);
 
     return propertiesCount;
-
   } catch (error) {
-    console.log(
-      `[${arrondissement}e] ❌ ERROR | ${formatDateTime(checkinDate)} → ${formatDateTime(checkoutDate)} | ${error.message}`
-    );
+    console.error(`❌ Error scraping ${arrondissement}e arrondissement:`, error);
     throw error;
   } finally {
     await browser.close();
@@ -308,9 +296,6 @@ function generateBookingUrl(arrondissement, checkinDate, checkoutDate) {
   return `${baseUrl}?${queryString}`;
 }
 
-// Array of arrondissements to scrape
-const arrondissements = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
-
 // Function to generate dates for the next 180 days
 function generateDates() {
   const dates = [];
@@ -341,23 +326,33 @@ function generateDates() {
   return dates;
 }
 
-// Function to scrape all arrondissements for a specific date
-async function scrapeAllArrondissementsForDate(checkinDate, checkoutDate) {
-  console.log(`\n🔄 Starting scraping for all arrondissements (10 en parallèle) pour les dates ${checkinDate} à ${checkoutDate}`);
-  const limit = pLimit(10); // Limite à 10 arrondissements en parallèle
-  const tasks = arrondissements.map(arrondissement =>
-    limit(async () => {
-      const url = generateBookingUrl(arrondissement, checkinDate, checkoutDate);
-      try {
-        await scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate);
-        console.log(`✅ Completed scraping for ${arrondissement}e arrondissement for dates ${checkinDate} to ${checkoutDate}`);
-      } catch (error) {
-        console.error(`❌ Error scraping ${arrondissement}e arrondissement:`, error);
-      }
-    })
-  );
-  await Promise.all(tasks);
-  console.log(`✅ Completed scraping for all arrondissements for dates ${checkinDate} to ${checkoutDate}\n`);
+async function scrapeAllArrondissements() {
+  const arrondissements = Array.from({length: 20}, (_, i) => i + 1);
+  const limit = pLimit(20); // Augmenter à 20 instances simultanées
+  
+  const dates = generateDates(); // 180 paires de dates
+  
+  for (const datePair of dates) {
+    console.log(`\n[${new Date().toISOString()}] Processing dates: ${datePair.checkin} to ${datePair.checkout}`);
+    
+    const promises = arrondissements.map(arrondissement => {
+      return limit(async () => {
+        try {
+          await new Promise(r => setTimeout(r, Math.random() * 5000)); // Délai aléatoire entre les requêtes
+          const count = await scrapeBookingHotels(arrondissement, datePair.checkin, datePair.checkout);
+          console.log(`✅ Completed scraping for ${arrondissement}e arrondissement for dates ${datePair.checkin} to ${datePair.checkout}`);
+          return count;
+        } catch (error) {
+          console.error(`❌ Error scraping ${arrondissement}e arrondissement:`, error);
+          return 0;
+        }
+      });
+    });
+
+    await Promise.all(promises);
+    // Attendre 2 secondes entre chaque date
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
 }
 
 // Initialize scraping process
@@ -366,13 +361,7 @@ async function main() {
     // S'assurer que la table existe avant de commencer
     await ensureTableExists();
     
-    const dates = generateDates(); // 180 paires de dates
-    for (const datePair of dates) {
-      console.log(`\n[${new Date().toISOString()}] Processing dates: ${datePair.checkin} to ${datePair.checkout}`);
-      await scrapeAllArrondissementsForDate(datePair.checkin, datePair.checkout);
-      // Optionnel : attendre 2 secondes entre chaque date
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
+    await scrapeAllArrondissements();
     console.log('\nScraping completed successfully!');
   } catch (error) {
     console.error('Error in main process:', error);
