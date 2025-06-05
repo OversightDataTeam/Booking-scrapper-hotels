@@ -14,15 +14,35 @@ console.log('🔑 Checking BigQuery credentials...');
 console.log('Project ID:', bigquery.projectId);
 console.log('Credentials path:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
 
-// Vérifier si le fichier de credentials existe
+// Vérifier si le fichier de credentials existe et est valide
 const fs = require('fs');
 if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
   try {
     const stats = fs.statSync(process.env.GOOGLE_APPLICATION_CREDENTIALS);
     console.log('✅ Credentials file exists, size:', stats.size, 'bytes');
+    
+    // Lire et vérifier le contenu du fichier
+    const credentials = JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'));
+    if (!credentials.project_id) {
+      console.error('❌ Missing project_id in credentials file');
+      process.exit(1);
+    }
+    if (!credentials.private_key) {
+      console.error('❌ Missing private_key in credentials file');
+      process.exit(1);
+    }
+    if (!credentials.client_email) {
+      console.error('❌ Missing client_email in credentials file');
+      process.exit(1);
+    }
+    console.log('✅ Credentials file is valid');
   } catch (error) {
-    console.error('❌ Credentials file not found:', error.message);
+    console.error('❌ Error with credentials file:', error.message);
+    process.exit(1);
   }
+} else {
+  console.error('❌ GOOGLE_APPLICATION_CREDENTIALS environment variable is not set');
+  process.exit(1);
 }
 
 const datasetId = 'MarketData';
