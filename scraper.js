@@ -110,19 +110,23 @@ function readExistingUrls(filename) {
 
 function getCurrentDateTime() {
   const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const year = now.getFullYear();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
+  // Convertir en heure de Paris (UTC+2)
+  const parisTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+  const day = String(parisTime.getDate()).padStart(2, '0');
+  const month = String(parisTime.getMonth() + 1).padStart(2, '0');
+  const year = parisTime.getFullYear();
+  const hours = String(parisTime.getHours()).padStart(2, '0');
+  const minutes = String(parisTime.getMinutes()).padStart(2, '0');
   
   return `${day}-${month}-${year} ${hours}:${minutes}`;
 }
 
 async function insertIntoBigQuery(arrondissement, propertiesCount) {
   const now = new Date();
+  // Convertir en heure de Paris (UTC+2)
+  const parisTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
   // Format DATETIME pour BigQuery (YYYY-MM-DD HH:mm:ss)
-  const observationDate = now.toISOString().replace('T', ' ').split('.')[0];
+  const observationDate = parisTime.toISOString().replace('T', ' ').split('.')[0];
 
   const rows = [{
     ObservationDate: observationDate,
