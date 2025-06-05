@@ -20,14 +20,14 @@ jobs:
     - name: Install dependencies
       run: npm install
       
-    - name: Verify credentials format
+    - name: Create credentials file
       run: |
-        echo "Verifying credentials format..."
-        node -e "try { const creds = JSON.parse(process.env.BIGQUERY_CREDENTIALS); if (!creds.client_email) throw new Error('Missing client_email'); console.log('Credentials format is valid'); } catch(e) { console.error('Invalid credentials format:', e.message); process.exit(1); }"
+        echo '${{ toJSON(secrets.BIGQUERY_CREDENTIALS) }}' > credentials.json
+        cat credentials.json
       env:
         BIGQUERY_CREDENTIALS: ${{ secrets.BIGQUERY_CREDENTIALS }}
       
     - name: Run scraper
       run: node scraper.js
       env:
-        BIGQUERY_CREDENTIALS: ${{ secrets.BIGQUERY_CREDENTIALS }} 
+        GOOGLE_APPLICATION_CREDENTIALS: credentials.json 
