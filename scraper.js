@@ -298,8 +298,23 @@ async function scrapeBookingHotels(url, arrondissement) {
       propertiesCount = await page.evaluate(() => {
         const h1s = Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim());
         console.log('🔍 [browser context] h1s:', h1s);
-        const match = h1s.map(title => title.match(/(\d+)\s+(?:properties|établissements?|exact matches?)\s+(?:found|trouvés)/i)).find(Boolean);
-        return match ? parseInt(match[1]) : 0;
+        const match = h1s.map(title => {
+          // Essayer différents formats
+          const patterns = [
+            /(\d+)\s+(?:properties|établissements?|exact matches?)\s+(?:found|trouvés)/i,
+            /(\d+)\s+exact matches/i,
+            /(\d+)\s+properties found/i,
+            /(\d+)\s+établissements trouvés/i
+          ];
+          
+          for (const pattern of patterns) {
+            const match = title.match(pattern);
+            if (match) return match[1];
+          }
+          return null;
+        }).find(Boolean);
+        
+        return match ? parseInt(match) : 0;
       });
 
       console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
@@ -317,7 +332,6 @@ async function scrapeBookingHotels(url, arrondissement) {
     }
 
     return propertiesCount;
-
   } catch (error) {
     console.error(`❌ Error occurred for ${arrondissement}e arrondissement:`, error);
     throw error;
@@ -373,4 +387,4 @@ async function main() {
 }
 
 // Start the scraping process
-main(); 
+main();
