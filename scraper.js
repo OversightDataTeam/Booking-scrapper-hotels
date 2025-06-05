@@ -149,10 +149,9 @@ async function waitForHotelCards(page) {
   throw new Error('No hotel card selectors found');
 }
 
-async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDate) {
+async function scrapeBookingHotels(url, arrondissement) {
   console.log(`🚀 Starting scraping process for ${arrondissement}e arrondissement...`);
   console.log(`📝 Target URL: ${url}`);
-  console.log(`📅 Dates - Check-in: ${checkinDate}, Check-out: ${checkoutDate}`);
 
   const browser = await puppeteer.launch({
     headless: "new",
@@ -226,44 +225,26 @@ async function scrapeBookingHotels(url, arrondissement, checkinDate, checkoutDat
 }
 
 function generateBookingUrl(arrondissement) {
-  // Calculate dates
-  const today = new Date();
-  const checkin = new Date(today);
-  checkin.setDate(today.getDate() + 180); // 180 days from now
-  
-  const checkout = new Date(checkin);
-  checkout.setDate(checkin.getDate() + 1); // Next day after check-in
-
-  // Format dates as YYYY-MM-DD
-  const formatDate = (date) => {
-    return date.toISOString().split('T')[0];
-  };
-
-  const checkinDate = formatDate(checkin);
-  const checkoutDate = formatDate(checkout);
-
   // URL exacte de Booking.com
   const baseUrl = 'https://www.booking.com/searchresults.en-gb.html';
   const params = {
-    ss: `${arrondissement}e+Arrondissement%2C+Parijs%2C+Ile+de+France%2C+Frankrijk`,
-    ssne: 'Paris',
-    ssne_untouched: 'Paris',
     label: 'gen173nr-1BCAEoggI46AdIM1gEaGyIAQGYAQm4AQfIAQzYAQHoAQGIAgGoAgO4Ar7Hvr8GwAIB0gIkOGIyNGEwNTAtMDk2Yy00ZWI4LWIzZjYtMTMwZDczODU0MzM12AIF4AIB',
     sid: '2077e49c9dfef2d8cef83f8cf65103b6',
     aid: '304142',
+    ss: `${arrondissement}e+arr.%2C+Paris%2C+Ile+de+France%2C+France`,
+    ssne: `${arrondissement + 1}e+arr.`,
+    ssne_untouched: `${arrondissement + 1}e+arr.`,
+    efdco: '1',
     lang: 'en-gb',
-    sb: '1',
-    src_elem: 'sb',
     src: 'searchresults',
     dest_id: arrondissement.toString(),
     dest_type: 'district',
-    ac_position: '1',
+    ac_position: '0',
     ac_click_type: 'b',
-    ac_langcode: 'nl',
-    ac_suggestion_list_length: '4',
+    ac_langcode: 'en',
+    ac_suggestion_list_length: '5',
     search_selected: 'true',
-    checkin: checkinDate,
-    checkout: checkoutDate,
+    search_pageview_id: '7c1753f25af00790',
     group_adults: '2',
     no_rooms: '1',
     group_children: '0',
@@ -276,8 +257,8 @@ function generateBookingUrl(arrondissement) {
 
   return {
     url: `${baseUrl}?${queryString}`,
-    checkinDate,
-    checkoutDate
+    checkinDate: null,
+    checkoutDate: null
   };
 }
 
@@ -289,8 +270,13 @@ async function scrapeAllArrondissements() {
   for (const arrondissement of arrondissements) {
     const bookingData = generateBookingUrl(arrondissement);
     try {
-      await scrapeBookingHotels(bookingData.url, arrondissement, bookingData.checkinDate, bookingData.checkoutDate);
+      await scrapeBookingHotels(bookingData.url, arrondissement);
       console.log(`✅ Terminé pour le ${arrondissement}e arrondissement`);
+      
+      // Attendre entre 5 et 10 secondes entre chaque arrondissement
+      const waitTime = Math.floor(Math.random() * 5000) + 5000;
+      console.log(`⏳ Waiting ${waitTime}ms before next arrondissement...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
     } catch (error) {
       console.error(`❌ Erreur pour le ${arrondissement}e arrondissement:`, error);
     }
@@ -334,7 +320,7 @@ async function main() {
 }
 
 // Start the scraping process
-main();
+main(); 
 
 async function scrapeArrondissement(page, arrondissement) {
   console.log(`🚀 Starting scraping process for ${arrondissement}e arrondissement...`);
