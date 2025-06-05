@@ -160,13 +160,20 @@ async function scrapeBookingHotels(url, arrondissement) {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--window-size=1920,1080',
-      '--start-maximized'
-    ]
+      '--start-maximized',
+      '--incognito' // Mode navigation privée
+    ],
+    userDataDir: `./chrome-profile-${arrondissement}` // Profil unique par arrondissement
   });
 
   try {
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
+
+    // Supprimer tous les cookies
+    const client = await page.target().createCDPSession();
+    await client.send('Network.clearBrowserCookies');
+    await client.send('Network.clearBrowserCache');
 
     // Set user agent to avoid detection
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
