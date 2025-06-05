@@ -392,7 +392,7 @@ async function scrapeArrondissement(page, arrondissement) {
       
       const rows = [{
         ObservationDate: formattedDate,
-        Arrondissement: `${arrondissement}e`,
+        Arrondissement: arrondissement.toString(),
         PropertiesCount: parseInt(propertyCount)
       }];
       
