@@ -72,12 +72,14 @@ function normalizeUrl(url) {
 
 function getCurrentDateTime() {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
+  // Convertir en heure de Paris (UTC+2)
+  const parisTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+  const year = parisTime.getFullYear();
+  const month = String(parisTime.getMonth() + 1).padStart(2, '0');
+  const day = String(parisTime.getDate()).padStart(2, '0');
+  const hours = String(parisTime.getHours()).padStart(2, '0');
+  const minutes = String(parisTime.getMinutes()).padStart(2, '0');
+  const seconds = String(parisTime.getSeconds()).padStart(2, '0');
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
@@ -157,7 +159,9 @@ async function sendToWebhook(arrondissement, propertiesCount, checkinDate, check
 
 async function insertIntoBigQuery(arrondissement, propertiesCount, checkinDate, checkoutDate) {
   const now = new Date();
-  const formattedDate = now.toISOString().replace('T', ' ').replace('Z', '');
+  // Convertir en heure de Paris (UTC+2)
+  const parisTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+  const formattedDate = parisTime.toISOString().replace('T', ' ').replace('Z', '');
   const formattedCheckin = new Date(checkinDate).toISOString().replace('T', ' ').replace('Z', '');
   const formattedCheckout = new Date(checkoutDate).toISOString().replace('T', ' ').replace('Z', '');
   
