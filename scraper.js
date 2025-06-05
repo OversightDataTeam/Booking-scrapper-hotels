@@ -100,23 +100,41 @@ async function insertIntoBigQuery(arrondissement, propertiesCount) {
   }];
 
   try {
+    console.log('📝 Préparation des données pour BigQuery:', JSON.stringify(rows, null, 2));
+    
     // Ajouter un délai court entre 2 et 5 secondes
     const delay = Math.floor(Math.random() * 3000) + 2000;
     console.log(`⏳ Waiting ${delay}ms before inserting data for arrondissement ${arrondissement}...`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
-    const [job] = await bigquery
-      .dataset(datasetId)
-      .table(tableId)
-      .insert(rows);
+    console.log('🔌 Tentative de connexion à BigQuery...');
+    const dataset = bigquery.dataset(datasetId);
+    const table = dataset.table(tableId);
     
-    console.log(`💾 Inserted data for arrondissement ${arrondissement} with ${propertiesCount} properties at ${observationDate}`);
+    console.log('📊 Vérification de l\'existence de la table...');
+    const [exists] = await table.exists();
+    if (!exists) {
+      console.log('⚠️ La table n\'existe pas, création en cours...');
+      await ensureTableExists();
+    }
+
+    console.log('💾 Insertion des données...');
+    const [job] = await table.insert(rows);
+    
+    console.log(`✅ Données insérées avec succès pour l'arrondissement ${arrondissement}:`, {
+      jobId: job.id,
+      timestamp: observationDate,
+      propertiesCount: propertiesCount
+    });
     
     return job;
   } catch (error) {
-    console.error('❌ Error inserting data to BigQuery:', error.message);
+    console.error('❌ Erreur lors de l\'insertion dans BigQuery:', error.message);
     if (error.errors) {
-      console.error('BigQuery errors:', JSON.stringify(error.errors, null, 2));
+      console.error('Détails des erreurs BigQuery:', JSON.stringify(error.errors, null, 2));
+    }
+    if (error.response) {
+      console.error('Réponse de l\'API:', JSON.stringify(error.response, null, 2));
     }
     // Ne pas throw l'erreur pour continuer le scraping même si l'insertion échoue
     return null;
