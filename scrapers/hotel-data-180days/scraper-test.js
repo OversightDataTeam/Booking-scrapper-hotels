@@ -1,7 +1,7 @@
 require('dotenv').config();
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const pLimit = require('p-limit');
+// const pLimit = require('p-limit'); // Problème avec ES modules
 const {BigQuery} = require('@google-cloud/bigquery');
 puppeteer.use(StealthPlugin());
 const axios = require('axios');
@@ -9,17 +9,17 @@ const axios = require('axios');
 // BigQuery configuration
 const bigquery = new BigQuery({
   projectId: 'oversight-datalake',
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS || './bigquery-credentials.json'
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS || './scrapers/hotel-data-180days/bigquery-credentials.json'
 });
 
 // Vérifier les credentials
 console.log('🔑 Checking BigQuery credentials...');
 console.log('Project ID:', bigquery.projectId);
-console.log('Credentials path:', process.env.GOOGLE_APPLICATION_CREDENTIALS || './bigquery-credentials.json');
+console.log('Credentials path:', process.env.GOOGLE_APPLICATION_CREDENTIALS || './scrapers/hotel-data-180days/bigquery-credentials.json');
 
 // Vérifier si le fichier de credentials existe
 const fs = require('fs');
-const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || './bigquery-credentials.json';
+const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || './scrapers/hotel-data-180days/bigquery-credentials.json';
 if (credentialsPath) {
   try {
     const stats = fs.statSync(credentialsPath);
@@ -207,8 +207,8 @@ async function scrapeBookingHotels(arrondissement, checkinDate, checkoutDate) {
       '--disable-gpu',
       '--window-size=1920x1080',
       '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-    ],
-    userDataDir: `./chrome-profile-${arrondissement}`
+    ]
+    // Supprimé userDataDir pour éviter les conflits sur macOS
   });
 
   try {
@@ -306,16 +306,16 @@ function generateBookingUrl(arrondissement, checkinDate, checkoutDate) {
   return `${baseUrl}?${queryString}`;
 }
 
-// Function to generate dates for the next 180 days
+// Function to generate dates for the next 2 days (TEST VERSION)
 function generateDates() {
   const dates = [];
   const today = new Date();
 
-  console.log('\n📅 GENERATING DATES');
+  console.log('\n📅 GENERATING DATES (TEST VERSION - 2 DAYS ONLY)');
   console.log('==================');
   console.log(`Today's date: ${today.toISOString().split('T')[0]}`);
 
-  for (let i = 0; i < 180; i++) {
+  for (let i = 0; i < 2; i++) {  // Seulement 2 jours pour le test
     const checkin = new Date(today);
     checkin.setDate(today.getDate() + i);
 
@@ -337,48 +337,27 @@ function generateDates() {
 }
 
 async function scrapeAllArrondissements() {
-  const arrondissements = Array.from({length: 20}, (_, i) => i + 1);
-  const limit = pLimit(3); // Seulement 3 instances simultanées pour éviter la détection
+  const arrondissements = [1, 2]; // Seulement 2 arrondissements pour le test
+  const dates = generateDates(); // 2 paires de dates pour le test
   
-  const dates = generateDates(); // 180 paires de dates
-  
-  // Traiter les dates par lots de 5 pour éviter de surcharger
-  const dateBatches = [];
-  for (let i = 0; i < dates.length; i += 5) {
-    dateBatches.push(dates.slice(i, i + 5));
-  }
-  
-  for (const dateBatch of dateBatches) {
-    console.log(`\n[${new Date().toISOString()}] Processing batch of ${dateBatch.length} dates`);
-    
-    // Traiter toutes les combinaisons date/arrondissement en parallèle
-    const allPromises = [];
-    
-    for (const datePair of dateBatch) {
-      for (const arrondissement of arrondissements) {
-        allPromises.push(
-          limit(async () => {
-            try {
-              // Délai aléatoire plus long pour éviter la détection
-              await new Promise(r => setTimeout(r, Math.random() * 10000 + 5000)); // 5-15 secondes
-              const count = await scrapeBookingHotels(arrondissement, datePair.checkin, datePair.checkout);
-              console.log(`✅ Completed: ${arrondissement}e arrondissement, ${datePair.checkin} → ${datePair.checkout}`);
-              return count;
-            } catch (error) {
-              console.error(`❌ Error: ${arrondissement}e arrondissement, ${datePair.checkin} → ${datePair.checkout}:`, error);
-              return 0;
-            }
-          })
-        );
+  // Traitement séquentiel pour le test (plus sûr)
+  for (const datePair of dates) {
+    for (const arrondissement of arrondissements) {
+      try {
+        console.log(`🔄 Processing: ${arrondissement}e arrondissement, ${datePair.checkin} → ${datePair.checkout}`);
+        
+        // Délai entre les requêtes pour éviter la détection
+        await new Promise(r => setTimeout(r, Math.random() * 5000 + 3000)); // 3-8 secondes
+        
+        const count = await scrapeBookingHotels(arrondissement, datePair.checkin, datePair.checkout);
+        console.log(`✅ Completed: ${arrondissement}e arrondissement, ${datePair.checkin} → ${datePair.checkout}`);
+      } catch (error) {
+        console.error(`❌ Error: ${arrondissement}e arrondissement, ${datePair.checkin} → ${datePair.checkout}:`, error);
       }
     }
-    
-    await Promise.all(allPromises);
-    console.log(`✅ Completed batch of ${dateBatch.length} dates`);
-    
-    // Délai entre les lots pour éviter la surcharge
-    await new Promise(resolve => setTimeout(resolve, 30000)); // 30 secondes
   }
+  
+  console.log(`✅ Completed all test requests`);
 }
 
 // Initialize scraping process
