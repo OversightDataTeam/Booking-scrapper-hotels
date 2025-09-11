@@ -22,10 +22,20 @@ jobs:
       with:
         node-version: '20'
 
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          scrapers/hotel-data-180days/node_modules
+          ~/.cache/puppeteer
+        key: ${{ runner.os }}-node-${{ hashFiles('scrapers/hotel-data-180days/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
     - name: Install dependencies
       run: |
         cd scrapers/hotel-data-180days
-        npm install
+        npm ci --only=production
 
     - name: Setup BigQuery credentials and run scraper
       run: |
