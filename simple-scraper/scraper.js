@@ -6,8 +6,8 @@ const fs = require('fs');
 // Configuration
 const CONFIG = {
   ARRONDISSEMENTS: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
-  CONCURRENT_LIMIT: 4,
-  DELAY_BETWEEN_REQUESTS: 2000,
+  CONCURRENT_LIMIT: 3,  // 3 workers en parallèle
+  DELAY_BETWEEN_BATCHES: 5000,  // 5 secondes entre les lots
   PROJECT_ID: 'oversight-datalake',
   DATASET_ID: 'MarketData',
   TABLE_ID: 'ArrondissementSummary'
@@ -269,26 +269,84 @@ async function insertToBigQuery(arrondissement, propertiesCount) {
   }
 }
 
-// Fonction principale
+// Fonction pour traiter un arrondissement complet (scraping + BigQuery)
+async function processArrondissement(arrondissement) {
+  try {
+    console.log(`🏠 Processing arrondissement ${arrondissement}...`);
+    const result = await scrapeArrondissement(arrondissement);
+    
+    // Insérer les données dans BigQuery
+    await insertToBigQuery(arrondissement, result.propertyCount);
+    
+    console.log(`✅ Arrondissement ${arrondissement} completed: ${result.propertyCount} properties`);
+    return result;
+  } catch (error) {
+    console.error(`❌ Error processing arrondissement ${arrondissement}:`, error.message);
+    return {
+      arrondissement,
+      propertyCount: 0,
+      error: error.message,
+      scrapedAt: new Date().toISOString()
+    };
+  }
+}
+
+// Fonction principale avec traitement parallèle
 async function main() {
   try {
+    console.log('🚀 Démarrage du scraper d\'arrondissements');
+    console.log(`📊 Configuration: ${CONFIG.CONCURRENT_LIMIT} workers en parallèle, ${CONFIG.ARRONDISSEMENTS.length} arrondissements`);
+    
     // S'assurer que la table existe avant de commencer
     await ensureTableExists();
     
-    for (let arrondissement = 1; arrondissement <= 20; arrondissement++) {
-      const result = await scrapeArrondissement(arrondissement);
+    const results = [];
+    
+    // Traiter les arrondissements par lots de 3
+    for (let i = 0; i < CONFIG.ARRONDISSEMENTS.length; i += CONFIG.CONCURRENT_LIMIT) {
+      const batch = CONFIG.ARRONDISSEMENTS.slice(i, i + CONFIG.CONCURRENT_LIMIT);
+      const batchNumber = Math.floor(i / CONFIG.CONCURRENT_LIMIT) + 1;
+      const totalBatches = Math.ceil(CONFIG.ARRONDISSEMENTS.length / CONFIG.CONCURRENT_LIMIT);
       
-      // Insérer les données dans BigQuery
-      await insertToBigQuery(arrondissement, result.propertyCount);
+      console.log(`\n🔄 Traitement du lot ${batchNumber}/${totalBatches}: arrondissements ${batch.join(', ')}`);
       
-      // Délai aléatoire entre 3 et 7 secondes
-      const waitTime = Math.floor(Math.random() * 4000) + 3000;
-      console.log(`⏳ Waiting ${waitTime}ms before next arrondissement...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      // Traiter le lot en parallèle
+      const batchPromises = batch.map(arrondissement => processArrondissement(arrondissement));
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Ajouter les résultats
+      results.push(...batchResults);
+      
+      // Délai entre les lots (sauf pour le dernier)
+      if (i + CONFIG.CONCURRENT_LIMIT < CONFIG.ARRONDISSEMENTS.length) {
+        console.log(`⏳ Attente ${CONFIG.DELAY_BETWEEN_BATCHES}ms avant le prochain lot...`);
+        await new Promise(resolve => setTimeout(resolve, CONFIG.DELAY_BETWEEN_BATCHES));
+      }
     }
-    console.log('✅ Scraping terminé pour tous les arrondissements');
+    
+    // Résumé final
+    console.log('\n📊 Résumé final:');
+    results.forEach(result => {
+      if (result.error) {
+        console.log(`   Arrondissement ${result.arrondissement}: ❌ Erreur - ${result.error}`);
+      } else {
+        console.log(`   Arrondissement ${result.arrondissement}: ${result.propertyCount} propriétés`);
+      }
+    });
+    
+    const totalProperties = results.reduce((sum, result) => sum + (result.propertyCount || 0), 0);
+    const successCount = results.filter(r => !r.error).length;
+    const errorCount = results.filter(r => r.error).length;
+    
+    console.log(`\n🎉 Total: ${totalProperties} propriétés trouvées sur ${successCount} arrondissements réussis`);
+    if (errorCount > 0) {
+      console.log(`⚠️ ${errorCount} arrondissements en erreur`);
+    }
+    
+    return results;
   } catch (error) {
     console.error('❌ Error in main process:', error);
+    throw error;
   }
 }
 
