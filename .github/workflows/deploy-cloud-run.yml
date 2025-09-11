@@ -1,0 +1,51 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'scrapers/arrondissement-count/**'
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: oversight-datalake
+  SERVICE_NAME: arrondissement-scraper
+  REGION: europe-west1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ env.PROJECT_ID }}
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Deploy to Cloud Run from source
+      run: |
+        cd scrapers/arrondissement-count
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --source . \
+          --platform managed \
+          --region ${{ env.REGION }} \
+          --allow-unauthenticated \
+          --memory 2Gi \
+          --cpu 2 \
+          --timeout 3600 \
+          --port 8080 \
+          --set-env-vars NODE_ENV=production,CONCURRENT_LIMIT=4
+
+    - name: Get service URL
+      run: |
+        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format="value(status.url)")
+        echo "Service deployed at: $SERVICE_URL"
+        echo "Test with: curl -X POST $SERVICE_URL/scrape -H 'Content-Type: application/json' -d '{\"startArrondissement\":1,\"endArrondissement\":5,\"concurrentLimit\":4}'"
