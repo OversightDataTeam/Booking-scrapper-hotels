@@ -1,7 +1,7 @@
 {
-  "name": "paris-arrondissement-legal-scraper",
+  "name": "paris-hotel-data-180days-scraper",
   "version": "1.0.0",
-  "description": "Legal info scraper for Paris arrondissements with 180 days of data",
+  "description": "Hotel data scraper for Paris arrondissements with 180 days of data",
   "main": "scraper.js",
   "scripts": {
     "start": "node scraper.js",

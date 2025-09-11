@@ -10,13 +10,13 @@ Collection de scrapers pour analyser les données des arrondissements parisiens 
 │   ├── scraper.js          # Code du scraper
 │   ├── package.json        # Dépendances
 │   └── README.md           # Documentation
-├── scrapers/legal-info/    # Scraper avancé (180 jours)
+├── scrapers/hotel-data-180days/    # Scraper avancé (180 jours)
 │   ├── scraper.js          # Code du scraper
 │   ├── package.json        # Dépendances
 │   └── README.md           # Documentation
 ├── .github/workflows/      # GitHub Actions
 │   ├── daily-scraper.yml   # Workflow simple (6h00)
-│   └── legal-scraper.yml   # Workflow avancé (2h00)
+│   └── hotel-data-180days.yml   # Workflow avancé (2h00)
 └── README.md               # Ce fichier
 ```
 
@@ -31,7 +31,7 @@ node scraper.js
 
 ### Scraper Avancé (180 jours)
 ```bash
-cd scrapers/legal-info
+cd scrapers/hotel-data-180days
 npm install
 node scraper.js
 ```

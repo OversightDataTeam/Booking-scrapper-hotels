@@ -1,4 +1,4 @@
-name: Daily Paris Legal Info Scraper
+name: Daily Paris Hotel Data Scraper (180 days)
 
 on:
   schedule:
@@ -24,11 +24,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        cd scrapers/legal-info
+        cd scrapers/hotel-data-180days
         npm install
 
     - name: Setup BigQuery credentials and run scraper
       run: |
-        cd scrapers/legal-info
+        cd scrapers/hotel-data-180days
         echo '${{ secrets.GCP_SA_KEY }}' > bigquery-credentials.json
         node scraper.js

@@ -1,6 +1,6 @@
-# 🏛️ Paris Arrondissement Legal Info Scraper
+# 🏨 Paris Hotel Data Scraper (180 days)
 
-Scraper avancé pour collecter les informations légales des arrondissements parisiens sur 180 jours.
+Scraper avancé pour collecter les données d'hôtels des arrondissements parisiens sur 180 jours.
 
 ## 🚀 Utilisation
 
