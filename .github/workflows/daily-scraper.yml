@@ -7,8 +7,6 @@ on:
 
 env:
   PROJECT_ID: oversight-datalake
-  SERVICE_NAME: paris-arrondissement-scraper
-  REGION: europe-west1
 
 jobs:
   scrape:
@@ -42,16 +40,3 @@ jobs:
       run: |
         cd simple-scraper
         node scraper.js
-
-    - name: Deploy to Cloud Run (if needed)
-      run: |
-        cd simple-scraper
-        gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --source . \
-          --platform managed \
-          --region ${{ env.REGION }} \
-          --allow-unauthenticated \
-          --memory 2Gi \
-          --cpu 2 \
-          --timeout 3600 \
-          --port 8080
