@@ -6,25 +6,26 @@ Collection de scrapers pour analyser les données des arrondissements parisiens 
 
 ```
 .
-├── simple-scraper/          # Scraper simple (comptage)
-│   ├── scraper.js          # Code du scraper
-│   ├── package.json        # Dépendances
-│   └── README.md           # Documentation
-├── scrapers/hotel-data-180days/    # Scraper avancé (180 jours)
-│   ├── scraper.js          # Code du scraper
-│   ├── package.json        # Dépendances
-│   └── README.md           # Documentation
-├── .github/workflows/      # GitHub Actions
-│   ├── daily-scraper.yml   # Workflow simple (6h00)
-│   └── hotel-data-180days.yml   # Workflow avancé (2h00)
-└── README.md               # Ce fichier
+├── scrapers/                         # Dossier des scrapers
+│   ├── arrondissement-count/         # Scraper simple (comptage)
+│   │   ├── scraper.js                # Code du scraper
+│   │   ├── package.json              # Dépendances
+│   │   └── README.md                 # Documentation
+│   └── hotel-data-180days/           # Scraper avancé (180 jours)
+│       ├── scraper.js                # Code du scraper
+│       ├── package.json              # Dépendances
+│       └── README.md                 # Documentation
+├── .github/workflows/                # GitHub Actions
+│   ├── daily-scraper.yml             # Workflow simple (6h00)
+│   └── hotel-data-180days.yml        # Workflow avancé (2h00)
+└── README.md                         # Documentation principale
 ```
 
 ## 🚀 Utilisation
 
 ### Scraper Simple (Comptage)
 ```bash
-cd simple-scraper
+cd scrapers/arrondissement-count
 npm install
 node scraper.js
 ```

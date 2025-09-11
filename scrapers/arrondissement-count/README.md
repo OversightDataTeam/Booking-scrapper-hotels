@@ -1,4 +1,4 @@
-# 🏠 Scraper Paris Arrondissements
+# 🏠 Paris Arrondissement Count Scraper
 
 Scraper simple pour compter les propriétés par arrondissement sur Booking.com.
 
@@ -6,7 +6,7 @@ Scraper simple pour compter les propriétés par arrondissement sur Booking.com.
 
 ### Local
 ```bash
-cd simple-scraper
+cd scrapers/arrondissement-count
 npm install
 node scraper.js
 ```

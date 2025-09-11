@@ -1,5 +1,5 @@
 {
-  "name": "paris-arrondissement-scraper",
+  "name": "paris-arrondissement-count-scraper",
   "version": "1.0.0",
   "description": "Simple scraper for Paris arrondissements",
   "main": "scraper.js",
