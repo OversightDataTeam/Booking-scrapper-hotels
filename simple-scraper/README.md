@@ -1,19 +1,6 @@
-# 🏠 Paris Arrondissement Scraper
+# 🏠 Scraper Paris Arrondissements
 
 Scraper simple pour compter les propriétés par arrondissement sur Booking.com.
-
-## 📁 Structure
-
-```
-.
-├── simple-scraper/          # Le scraper principal
-│   ├── scraper.js          # Code du scraper
-│   ├── package.json        # Dépendances
-│   └── README.md           # Documentation
-├── .github/workflows/      # GitHub Actions
-│   └── deploy-cloud-run.yml # Workflow daily
-└── README.md               # Ce fichier
-```
 
 ## 🚀 Utilisation
 
@@ -24,7 +11,7 @@ npm install
 node scraper.js
 ```
 
-### Daily (GitHub Actions)
+### Cloud Run (via GitHub Actions)
 Le scraper se lance automatiquement tous les jours à 6h00.
 
 ## 📊 Données

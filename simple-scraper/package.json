@@ -1,0 +1,19 @@
+{
+  "name": "paris-arrondissement-scraper",
+  "version": "1.0.0",
+  "description": "Simple scraper for Paris arrondissements",
+  "main": "scraper.js",
+  "scripts": {
+    "start": "node scraper.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "dependencies": {
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer": "^21.5.2",
+    "@google-cloud/bigquery": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

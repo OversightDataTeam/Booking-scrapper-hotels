@@ -1,24 +1,32 @@
-name: Deploy to Cloud Run
+name: Daily Paris Arrondissement Scraper
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'scrapers/arrondissement-count/**'
-  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'  # Tous les jours à 6h00
+  workflow_dispatch:  # Permet de lancer manuellement
 
 env:
   PROJECT_ID: oversight-datalake
-  SERVICE_NAME: arrondissement-scraper
+  SERVICE_NAME: paris-arrondissement-scraper
   REGION: europe-west1
 
 jobs:
-  deploy:
+  scrape:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: |
+        cd simple-scraper
+        npm install
 
     - name: Setup Google Cloud CLI
       uses: google-github-actions/setup-gcloud@v2
@@ -30,9 +38,14 @@ jobs:
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-    - name: Deploy to Cloud Run from source
+    - name: Run scraper
       run: |
-        cd scrapers/arrondissement-count
+        cd simple-scraper
+        node scraper.js
+
+    - name: Deploy to Cloud Run (if needed)
+      run: |
+        cd simple-scraper
         gcloud run deploy ${{ env.SERVICE_NAME }} \
           --source . \
           --platform managed \
@@ -41,11 +54,4 @@ jobs:
           --memory 2Gi \
           --cpu 2 \
           --timeout 3600 \
-          --port 8080 \
-          --set-env-vars NODE_ENV=production,CONCURRENT_LIMIT=4
-
-    - name: Get service URL
-      run: |
-        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format="value(status.url)")
-        echo "Service deployed at: $SERVICE_URL"
-        echo "Test with: curl -X POST $SERVICE_URL/scrape -H 'Content-Type: application/json' -d '{\"startArrondissement\":1,\"endArrondissement\":5,\"concurrentLimit\":4}'"
+          --port 8080
