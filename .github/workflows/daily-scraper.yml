@@ -26,15 +26,10 @@ jobs:
         cd simple-scraper
         npm install
 
-    - name: Setup Google Cloud CLI
-      uses: google-github-actions/setup-gcloud@v2
-      with:
-        project_id: ${{ env.PROJECT_ID }}
-
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
+    - name: Setup BigQuery credentials
+      run: |
+        cd simple-scraper
+        echo '${{ secrets.GCP_SA_KEY }}' > bigquery-credentials.json
 
     - name: Run scraper
       run: |
