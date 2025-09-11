@@ -1,0 +1,42 @@
+[
+  {
+    "ObservationDate": "2025-09-10 15:01:30",
+    "Arrondissement": "1",
+    "PropertiesCount": 84
+  },
+  {
+    "ObservationDate": "2025-09-10 15:01:30",
+    "Arrondissement": "2",
+    "PropertiesCount": 59
+  },
+  {
+    "ObservationDate": "2025-09-10 15:01:30",
+    "Arrondissement": "3",
+    "PropertiesCount": 40
+  },
+  {
+    "ObservationDate": "2025-09-10 15:01:30",
+    "Arrondissement": "4",
+    "PropertiesCount": 44
+  },
+  {
+    "ObservationDate": "2025-09-10 15:01:30",
+    "Arrondissement": "5",
+    "PropertiesCount": 87
+  },
+  {
+    "ObservationDate": "2025-09-10 15:01:30",
+    "Arrondissement": "6",
+    "PropertiesCount": 108
+  },
+  {
+    "ObservationDate": "2025-09-10 15:01:30",
+    "Arrondissement": "7",
+    "PropertiesCount": 70
+  },
+  {
+    "ObservationDate": "2025-09-10 15:01:30",
+    "Arrondissement": "8",
+    "PropertiesCount": 0
+  }
+]

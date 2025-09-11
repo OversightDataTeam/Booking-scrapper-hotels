@@ -1,0 +1,38 @@
+[
+  {
+    "url": "https://www.booking.com/hotel/fr/majestic.en-gb.html?selected_currency=EUR&chal_t=1757494050847&force_referer=",
+    "businessName": null,
+    "address": null,
+    "email": "121@paris17hotel.com",
+    "phone": "+33158592222",
+    "registerNumber": null,
+    "scrapedAt": "2025-09-10T08:47:46.109Z"
+  },
+  {
+    "url": "https://www.booking.com/hotel/fr/hotel-montparnasse.en-gb.html?selected_currency=EUR",
+    "businessName": null,
+    "address": null,
+    "email": "info@55montparnasse.com",
+    "phone": "+33145428143",
+    "registerNumber": null,
+    "scrapedAt": "2025-09-10T08:47:58.634Z"
+  },
+  {
+    "url": "https://www.booking.com/hotel/fr/opera-cyrano.en-gb.html?selected_currency=EUR",
+    "businessName": "Hotel Co",
+    "address": null,
+    "email": "info@le9hotel.com",
+    "phone": "+33 1 58 36 07 50",
+    "registerNumber": null,
+    "scrapedAt": "2025-09-10T08:48:11.157Z"
+  },
+  {
+    "url": "https://www.booking.com/hotel/fr/acropole-paris.en-gb.html?selected_currency=EUR",
+    "businessName": null,
+    "address": null,
+    "email": "info@acropole-paris-hotel.com",
+    "phone": "+3301 45 39 64 17",
+    "registerNumber": null,
+    "scrapedAt": "2025-09-10T08:48:22.701Z"
+  }
+]

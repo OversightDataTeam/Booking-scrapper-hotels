@@ -2,6 +2,8 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 puppeteer.use(StealthPlugin());
 const {BigQuery} = require('@google-cloud/bigquery');
+const config = require('../config');
+const utils = require('../utils');
 
 // BigQuery configuration
 let credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -58,6 +60,16 @@ if (credentialsPath) {
 
 const datasetId = 'MarketData';
 const tableId = 'ArrondissementSummary';
+
+// Configuration optimisée
+const CONFIG = {
+    OUTPUT_FILE: '../../../data/arrondissement-results.json',
+    CSV_FILE: '../../../data/arrondissement-results.csv',
+    CONCURRENT_LIMIT: 4, // 4 processus parallèles pour plus de vitesse
+    DELAY_BETWEEN_REQUESTS: 3000, // 3 secondes entre les batches
+    PAGE_TIMEOUT: 60000, // 60 secondes pour plus de fiabilité
+    RETRY_DELAY: 5000 // 5 secondes entre les retries
+};
 
 // Schéma de la table
 const schema = {
@@ -121,6 +133,19 @@ function getCurrentDateTime() {
   return `${day}-${month}-${year} ${hours}:${minutes}`;
 }
 
+function saveSingleResultToCSV(result, isFirst = false) {
+    const csvLine = `${result.ObservationDate},${result.Arrondissement},${result.PropertiesCount}`;
+    
+    if (isFirst) {
+        const csvHeader = 'ObservationDate,Arrondissement,PropertiesCount\n';
+        fs.writeFileSync(CONFIG.CSV_FILE, csvHeader + csvLine + '\n');
+        console.log(`📝 CSV créé avec l'arrondissement ${result.Arrondissement}`);
+    } else {
+        fs.appendFileSync(CONFIG.CSV_FILE, csvLine + '\n');
+        console.log(`📝 Arrondissement ${result.Arrondissement} ajouté au CSV`);
+    }
+}
+
 async function insertIntoBigQuery(arrondissement, propertiesCount) {
   const now = new Date();
   // Convertir en heure de Paris (UTC+2)
@@ -135,28 +160,31 @@ async function insertIntoBigQuery(arrondissement, propertiesCount) {
   }];
 
   try {
-    console.log('📝 Préparation des données pour BigQuery:', JSON.stringify(rows, null, 2));
+    console.log(`📝 [${arrondissement}] Préparation des données pour BigQuery:`, JSON.stringify(rows, null, 2));
     
     // Ajouter un délai court entre 2 et 5 secondes
     const delay = Math.floor(Math.random() * 3000) + 2000;
-    console.log(`⏳ Waiting ${delay}ms before inserting data for arrondissement ${arrondissement}...`);
+    console.log(`⏳ [${arrondissement}] Waiting ${delay}ms before inserting data...`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
-    console.log('🔌 Tentative de connexion à BigQuery...');
+    console.log(`🔌 [${arrondissement}] Tentative de connexion à BigQuery...`);
     const dataset = bigquery.dataset(datasetId);
     const table = dataset.table(tableId);
     
-    console.log('📊 Vérification de l\'existence de la table...');
+    console.log(`📊 [${arrondissement}] Vérification de l'existence de la table...`);
     const [exists] = await table.exists();
     if (!exists) {
-      console.log('⚠️ La table n\'existe pas, création en cours...');
+      console.log(`⚠️ [${arrondissement}] La table n'existe pas, création en cours...`);
       await ensureTableExists();
     }
 
-    console.log('💾 Insertion des données...');
-    const [job] = await table.insert(rows);
+    console.log(`💾 [${arrondissement}] Insertion des données...`);
+    const [job] = await table.insert(rows, {
+      createDisposition: 'CREATE_IF_NEEDED',
+      writeDisposition: 'WRITE_APPEND'
+    });
     
-    console.log(`✅ Données insérées avec succès pour l'arrondissement ${arrondissement}:`, {
+    console.log(`✅ [${arrondissement}] Données insérées avec succès:`, {
       jobId: job.id,
       timestamp: observationDate,
       propertiesCount: propertiesCount
@@ -164,12 +192,12 @@ async function insertIntoBigQuery(arrondissement, propertiesCount) {
     
     return job;
   } catch (error) {
-    console.error('❌ Erreur lors de l\'insertion dans BigQuery:', error.message);
+    console.error(`❌ [${arrondissement}] Erreur lors de l'insertion dans BigQuery:`, error.message);
     if (error.errors) {
-      console.error('Détails des erreurs BigQuery:', JSON.stringify(error.errors, null, 2));
+      console.error(`Détails des erreurs BigQuery:`, JSON.stringify(error.errors, null, 2));
     }
     if (error.response) {
-      console.error('Réponse de l\'API:', JSON.stringify(error.response, null, 2));
+      console.error(`Réponse de l'API:`, JSON.stringify(error.response, null, 2));
     }
     // Ne pas throw l'erreur pour continuer le scraping même si l'insertion échoue
     return null;
@@ -203,8 +231,8 @@ async function waitForHotelCards(page) {
 }
 
 async function scrapeBookingHotels(url, arrondissement) {
-  console.log(`🚀 Starting scraping process for ${arrondissement}e arrondissement...`);
-  console.log(`📝 Target URL: ${url}`);
+  console.log(`🚀 [${arrondissement}] Starting scraping process for ${arrondissement}e arrondissement...`);
+  console.log(`📝 [${arrondissement}] Target URL: ${url}`);
 
   const browser = await puppeteer.launch({
     headless: "new",
@@ -229,15 +257,15 @@ async function scrapeBookingHotels(url, arrondissement) {
 
     while (propertiesCount === 0 && retryCount < maxRetries) {
       if (retryCount > 0) {
-        console.log(`🔄 Retry #${retryCount} for arrondissement ${arrondissement}...`);
+        console.log(`🔄 [${arrondissement}] Retry #${retryCount} for arrondissement ${arrondissement}...`);
         // Attendre un peu plus longtemps entre chaque retry
         const retryDelay = Math.floor(Math.random() * 5000) + 5000;
-        console.log(`⏳ Waiting ${retryDelay}ms before retry...`);
+        console.log(`⏳ [${arrondissement}] Waiting ${retryDelay}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
 
       const page = await browser.newPage();
-      page.setDefaultNavigationTimeout(60000);
+      page.setDefaultNavigationTimeout(CONFIG.PAGE_TIMEOUT);
 
       // Set user agent to avoid detection
       await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
@@ -258,24 +286,24 @@ async function scrapeBookingHotels(url, arrondissement) {
       await client.send('Network.clearBrowserCookies');
       await client.send('Network.clearBrowserCache');
 
-      console.log('🌐 Navigating to:', url);
+      console.log(`🌐 [${arrondissement}] Navigating to:`, url);
       await page.goto(url, { 
         waitUntil: 'networkidle0',
-        timeout: 60000 
+        timeout: CONFIG.PAGE_TIMEOUT 
       });
 
       // Nettoyer l'URL des paramètres de date
       const currentUrl = await page.url();
       const urlWithoutDates = currentUrl.replace(/&checkin=\d{4}-\d{2}-\d{2}&checkout=\d{4}-\d{2}-\d{2}/, '');
       if (currentUrl !== urlWithoutDates) {
-        console.log('🔄 Nettoyage de l\'URL des dates...');
+        console.log(`🔄 [${arrondissement}] Nettoyage de l'URL des dates...`);
         await page.goto(urlWithoutDates, { 
           waitUntil: 'networkidle0',
-          timeout: 60000 
+          timeout: CONFIG.PAGE_TIMEOUT 
         });
       }
 
-      console.log('🌐 Current URL:', await page.url());
+      console.log(`🌐 [${arrondissement}] Current URL:`, await page.url());
       
       // Add a delay to ensure the page is fully loaded
       await new Promise(resolve => setTimeout(resolve, 5000));
@@ -284,13 +312,13 @@ async function scrapeBookingHotels(url, arrondissement) {
       const pageContent = await page.content();
       const pageContentLower = pageContent.toLowerCase();
       if (pageContentLower.includes('robot') || pageContentLower.includes('captcha') || pageContentLower.includes('access denied')) {
-        console.warn('⚠️ Possible bot detection or access denied!');
+        console.warn(`⚠️ [${arrondissement}] Possible bot detection or access denied!`);
       }
-      console.log('📄 Page content (first 500 chars):', pageContent.substring(0, 500) + '...');
+      console.log(`📄 [${arrondissement}] Page content (first 500 chars):`, pageContent.substring(0, 500) + '...');
 
       // Log all h1 contents
       const h1Contents = await page.evaluate(() => Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim()));
-      console.log('🔍 Tous les h1 récupérés :', h1Contents);
+      console.log(`🔍 [${arrondissement}] Tous les h1 récupérés :`, h1Contents);
 
       // Wait for the title element that contains the number of properties
       await page.waitForSelector('h1', { 
@@ -299,9 +327,9 @@ async function scrapeBookingHotels(url, arrondissement) {
       });
 
       // Extract the number of properties from the title
-      propertiesCount = await page.evaluate(() => {
+      propertiesCount = await page.evaluate((arr) => {
         const h1s = Array.from(document.querySelectorAll('h1')).map(h => h.textContent.trim());
-        console.log('🔍 [browser context] h1s:', h1s);
+        console.log(`🔍 [${arr}] [browser context] h1s:`, h1s);
         const match = h1s.map(title => {
           // Essayer différents formats
           const patterns = [
@@ -319,26 +347,26 @@ async function scrapeBookingHotels(url, arrondissement) {
         }).find(Boolean);
         
         return match ? parseInt(match) : 0;
-      });
+      }, arrondissement);
 
-      console.log(`📊 Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
+      console.log(`📊 [${arrondissement}] Found ${propertiesCount} properties in ${arrondissement}e arrondissement`);
 
       await page.close();
 
       if (propertiesCount === 0) {
         retryCount++;
         if (retryCount < maxRetries) {
-          console.log(`⚠️ No properties found, will retry (${retryCount}/${maxRetries})...`);
+          console.log(`⚠️ [${arrondissement}] No properties found, will retry (${retryCount}/${maxRetries})...`);
         } else {
-          console.log(`❌ No properties found after ${maxRetries} attempts`);
+          console.log(`❌ [${arrondissement}] No properties found after ${maxRetries} attempts`);
         }
       }
     }
 
     return propertiesCount;
   } catch (error) {
-    console.error(`❌ Error occurred for ${arrondissement}e arrondissement:`, error);
-    throw error;
+    console.error(`❌ [${arrondissement}] Error occurred for ${arrondissement}e arrondissement:`, error.message);
+    return 0; // Retourner 0 au lieu de throw pour continuer
   } finally {
     await browser.close();
   }
@@ -361,9 +389,34 @@ function generateBookingUrl(arrondissement) {
     .map(([key, value]) => `${key}=${value}`)
     .join('&');
 
-  return {
-    url: `${baseUrl}?${queryString}`
-  };
+  return `${baseUrl}?${queryString}`;
+}
+
+// Fonction pour traiter un batch d'arrondissements en parallèle
+async function processBatch(arrondissements, observationDate) {
+  const promises = arrondissements.map(async (arrondissement) => {
+    const url = generateBookingUrl(arrondissement);
+    const propertiesCount = await scrapeBookingHotels(url, arrondissement);
+    
+    const result = {
+      ObservationDate: observationDate,
+      Arrondissement: arrondissement.toString(),
+      PropertiesCount: propertiesCount
+    };
+    
+    console.log(`✅ [${arrondissement}] ${propertiesCount} propriétés`);
+    
+    // Sauvegarder immédiatement en CSV
+    const isFirst = (arrondissement === 1);
+    saveSingleResultToCSV(result, isFirst);
+    
+    // Insérer dans BigQuery
+    await insertIntoBigQuery(arrondissement, propertiesCount);
+    
+    return result;
+  });
+  
+  return Promise.all(promises);
 }
 
 // Scraper tous les arrondissements de 1 à 20
@@ -372,19 +425,50 @@ async function main() {
     // S'assurer que la table existe avant de commencer
     await ensureTableExists();
     
-    for (let arrondissement = 1; arrondissement <= 20; arrondissement++) {
-      const bookingData = generateBookingUrl(arrondissement);
-      const propertiesCount = await scrapeBookingHotels(bookingData.url, arrondissement);
+    console.log(`🚀 Démarrage du scraper optimisé avec ${CONFIG.CONCURRENT_LIMIT} processus parallèles`);
+    console.log(`⚡ Optimisations: délais équilibrés, timeouts fiables, BigQuery intégré, sauvegarde progressive`);
+    
+    const allResults = [];
+    const now = new Date();
+    const parisTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+    const observationDate = parisTime.toISOString().replace('T', ' ').split('.')[0];
+    
+    const arrondissements = Array.from({length: 20}, (_, i) => i + 1);
+    
+    // Traiter par batches parallèles
+    for (let i = 0; i < arrondissements.length; i += CONFIG.CONCURRENT_LIMIT) {
+      const batch = arrondissements.slice(i, i + CONFIG.CONCURRENT_LIMIT);
+      console.log(`\n🔄 Traitement du batch ${Math.floor(i/CONFIG.CONCURRENT_LIMIT) + 1}: arrondissements ${batch.join(', ')}`);
       
-      // Insérer les données dans BigQuery
-      await insertIntoBigQuery(arrondissement, propertiesCount);
+      const batchResults = await processBatch(batch, observationDate);
+      allResults.push(...batchResults);
+      
+      // Sauvegarder le JSON complet
+      fs.writeFileSync(CONFIG.OUTPUT_FILE, JSON.stringify(allResults, null, 2));
+      
+      console.log(`📊 Progression: ${allResults.length}/20 (${Math.round(allResults.length/20*100)}%)`);
       
       // Délai aléatoire entre 3 et 7 secondes
-      const waitTime = Math.floor(Math.random() * 4000) + 3000;
-      console.log(`⏳ Waiting ${waitTime}ms before next arrondissement...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      if (i + CONFIG.CONCURRENT_LIMIT < arrondissements.length) {
+        const waitTime = Math.floor(Math.random() * 4000) + 3000;
+        console.log(`⏳ Waiting ${waitTime}ms before next batch...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
-    console.log('✅ Scraping terminé pour tous les arrondissements');
+    
+    console.log('\n🎉 Scraping terminé pour tous les arrondissements');
+    console.log(`📊 Total: ${allResults.length} arrondissements traités`);
+    console.log(`💾 Résultats sauvegardés dans ${CONFIG.OUTPUT_FILE} et ${CONFIG.CSV_FILE}`);
+    console.log(`📊 Données insérées dans BigQuery: ${datasetId}.${tableId}`);
+    
+    // Statistiques finales
+    const totalProperties = allResults.reduce((sum, result) => sum + result.PropertiesCount, 0);
+    const avgProperties = Math.round(totalProperties / allResults.length);
+    console.log(`📈 Statistiques:`);
+    console.log(`   - Total propriétés: ${totalProperties}`);
+    console.log(`   - Moyenne par arrondissement: ${avgProperties}`);
+    console.log(`   - Arrondissement avec le plus de propriétés: ${Math.max(...allResults.map(r => r.PropertiesCount))}`);
+    
   } catch (error) {
     console.error('❌ Error in main process:', error);
   }
