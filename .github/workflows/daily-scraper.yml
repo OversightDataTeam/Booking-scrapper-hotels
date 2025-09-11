@@ -26,12 +26,8 @@ jobs:
         cd simple-scraper
         npm install
 
-    - name: Setup BigQuery credentials
+    - name: Setup BigQuery credentials and run scraper
       run: |
         cd simple-scraper
         echo '${{ secrets.GCP_SA_KEY }}' > bigquery-credentials.json
-
-    - name: Run scraper
-      run: |
-        cd simple-scraper
         node scraper.js
