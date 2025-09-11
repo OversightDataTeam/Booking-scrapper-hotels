@@ -1,7 +1,7 @@
 require('dotenv').config();
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const pLimit = require('p-limit');
+// const pLimit = require('p-limit'); // Problème avec ES modules
 const {BigQuery} = require('@google-cloud/bigquery');
 puppeteer.use(StealthPlugin());
 const axios = require('axios');
@@ -336,9 +336,39 @@ function generateDates() {
   return dates;
 }
 
+// Fonction simple pour limiter la concurrence
+function createLimit(concurrency) {
+  let running = 0;
+  const queue = [];
+  
+  return async (fn) => {
+    return new Promise((resolve, reject) => {
+      queue.push({ fn, resolve, reject });
+      processQueue();
+    });
+  };
+  
+  async function processQueue() {
+    if (running >= concurrency || queue.length === 0) return;
+    
+    running++;
+    const { fn, resolve, reject } = queue.shift();
+    
+    try {
+      const result = await fn();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      running--;
+      processQueue();
+    }
+  }
+}
+
 async function scrapeAllArrondissements() {
   const arrondissements = Array.from({length: 20}, (_, i) => i + 1);
-  const limit = pLimit(3); // Seulement 3 instances simultanées pour éviter la détection
+  const limit = createLimit(3); // Seulement 3 instances simultanées pour éviter la détection
   
   const dates = generateDates(); // 180 paires de dates
   
