@@ -1,0 +1,52 @@
+name: Daily Room Policies Scraper
+
+on:
+  schedule:
+    - cron: '0 4 * * *'  # Tous les jours à 04:00 UTC
+  workflow_dispatch:  # Permet de lancer manuellement
+
+env:
+  PROJECT_ID: oversight-datalake
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 heures max
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            scrapers/room-policies/node_modules
+            ~/.cache/puppeteer
+          key: ${{ runner.os }}-node-${{ hashFiles('scrapers/room-policies/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: |
+          cd scrapers/room-policies
+          npm ci --only=production
+
+      - name: Setup BigQuery credentials and run scraper
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/scrapers/room-policies/bigquery-credentials.json
+        run: |
+          cd scrapers/room-policies
+          echo '${{ secrets.GCP_SA_KEY }}' > bigquery-credentials.json
+          node index.js
+
+
+# Bumped to trigger GitHub to re-index workflows
+
+
+
