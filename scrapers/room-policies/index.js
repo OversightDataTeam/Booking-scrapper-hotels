@@ -2,12 +2,39 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const path = require('path');
+const { BigQuery } = require('@google-cloud/bigquery');
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 const { parse } = require('csv-parse/sync');
 puppeteer.use(StealthPlugin());
+
+// Configuration BigQuery
+const bigquery = new BigQuery({
+  projectId: 'oversight-datalake',
+  keyFilename: './bigquery-credentials.json'
+});
+
+// Configuration de la table
+const DATASET_ID = 'HotelsPrices';
+const TABLE_ID = 'Booking_Scrapper';
+
+// Schéma de la table selon les spécifications de Delphin
+const schema = {
+  fields: [
+    {name: 'ObservationDate', type: 'DATETIME', mode: 'NULLABLE'},
+    {name: 'BaseUrl', type: 'STRING', mode: 'NULLABLE'},
+    {name: 'Checkin', type: 'DATE', mode: 'NULLABLE'},
+    {name: 'Checkout', type: 'DATE', mode: 'NULLABLE'},
+    {name: 'RoomName', type: 'STRING', mode: 'NULLABLE'},
+    {name: 'Cancellation', type: 'STRING', mode: 'NULLABLE'},
+    {name: 'Price', type: 'STRING', mode: 'NULLABLE'},
+    {name: 'Status', type: 'STRING', mode: 'NULLABLE'},
+    {name: 'FullUrl', type: 'STRING', mode: 'NULLABLE'},
+    {name: 'Error', type: 'STRING', mode: 'NULLABLE'}
+  ]
+};
 
 // Configuration exécutable via variables d'environnement
 // - BATCH_LIMIT: limite le nombre d'hôtels à traiter (0 = tous)
@@ -552,65 +579,85 @@ const hotelConfigs = records.map(row => ({
   roomTypes: row.slice(1).filter(Boolean)
 }));
 
-// Écriture CSV des résultats dans results/room_policies_results.csv (délimiteur ;)
-const resultsDir = path.join(__dirname, 'results');
-const resultsCsvPath = path.join(resultsDir, 'room_policies_results.csv');
 
-function ensureDirectoryExists(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
+// Fonction pour créer la table si elle n'existe pas
+async function ensureTableExists() {
+  try {
+    const dataset = bigquery.dataset(DATASET_ID);
+    const [exists] = await dataset.table(TABLE_ID).exists();
+    
+    if (!exists) {
+      console.log(`📊 Creating table ${DATASET_ID}.${TABLE_ID}...`);
+      await dataset.createTable(TABLE_ID, {
+        schema: schema
+      });
+      console.log(`✅ Table ${DATASET_ID}.${TABLE_ID} created successfully`);
+    }
+  } catch (error) {
+    console.error('❌ Error ensuring table exists:', error.message);
+    throw error;
   }
 }
 
-function sanitizeCsvValue(value) {
-  return String(value ?? '')
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/;/g, ',')
-    .trim();
+// Fonction pour insérer les données dans BigQuery
+async function insertToBigQuery(rowData) {
+  const now = new Date();
+  // Convertir en heure de Paris (UTC+2)
+  const parisTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+  const observationDate = parisTime.toISOString().replace('T', ' ').split('.')[0];
+
+  const rows = [{
+    ObservationDate: observationDate,
+    BaseUrl: rowData.baseUrl,
+    Checkin: rowData.checkin,
+    Checkout: rowData.checkout,
+    RoomName: rowData.roomName,
+    Cancellation: rowData.cancellation,
+    Price: rowData.price,
+    Status: rowData.status,
+    FullUrl: rowData.fullUrl,
+    Error: rowData.error
+  }];
+
+  try {
+    console.log('📝 Inserting data to BigQuery:', JSON.stringify(rows, null, 2));
+    
+    const dataset = bigquery.dataset(DATASET_ID);
+    const table = dataset.table(TABLE_ID);
+    
+    const [job] = await table.insert(rows);
+    
+    console.log(`✅ Data inserted successfully:`, {
+      jobId: job.id,
+      timestamp: observationDate
+    });
+    
+    return job;
+  } catch (error) {
+    console.error('❌ Error inserting data to BigQuery:', error.message);
+    if (error.errors) {
+      console.error('BigQuery errors:', JSON.stringify(error.errors, null, 2));
+    }
+    return null;
+  }
 }
 
-function writeResultsToCsv(rows) {
-  ensureDirectoryExists(resultsDir);
-  const headers = [
-    'baseUrl',
-    'checkin',
-    'checkout',
-    'roomName',
-    'cancellation',
-    'price',
-    'status',
-    'fullUrl',
-    'error'
-  ];
-
-  const needsHeader = !fs.existsSync(resultsCsvPath);
-  const lines = [];
-  if (needsHeader) {
-    lines.push(headers.join(';'));
-  }
-
+async function insertResultsToBigQuery(rows) {
   for (const row of rows) {
-    const values = [
-      sanitizeCsvValue(row.baseUrl),
-      sanitizeCsvValue(row.checkin),
-      sanitizeCsvValue(row.checkout),
-      sanitizeCsvValue(row.roomName),
-      sanitizeCsvValue(row.cancellation),
-      sanitizeCsvValue(row.price),
-      sanitizeCsvValue(row.status),
-      sanitizeCsvValue(row.fullUrl),
-      sanitizeCsvValue(row.error)
-    ];
-    lines.push(values.join(';'));
+    try {
+      await insertToBigQuery(row);
+    } catch (error) {
+      console.error('❌ Error inserting to BigQuery:', error);
+    }
   }
-
-  fs.appendFileSync(resultsCsvPath, lines.join('\n') + '\n', 'utf8');
-  console.log(`📄 Résultats écrits dans ${resultsCsvPath}`);
 }
 
 // Fonction principale pour traiter plusieurs hôtels en parallèle
 async function processHotels(hotelConfigs) {
   console.log('🎬 Démarrage du traitement des hôtels...');
+  
+  // S'assurer que la table BigQuery existe
+  await ensureTableExists();
   
   const limitedHotelConfigs = MAX_HOTELS > 0 ? hotelConfigs.slice(0, MAX_HOTELS) : hotelConfigs;
   const dateRanges = generateDateRanges();
@@ -651,9 +698,9 @@ async function processHotels(hotelConfigs) {
           fullUrl
         };
 
-        // Écrire les données immédiatement dans le CSV
+        // Insérer les données dans BigQuery
         const r = resultWithConfig;
-        writeResultsToCsv([
+        await insertResultsToBigQuery([
           {
             baseUrl: r.urlInfo?.baseUrl || r.hotelConfig.url,
             checkin: r.roomInfo?.checkin || checkin,
@@ -676,8 +723,8 @@ async function processHotels(hotelConfigs) {
           error: error.message
         };
         
-        // Écrire l'erreur aussi dans le CSV
-        writeResultsToCsv([
+        // Insérer l'erreur dans BigQuery
+        await insertResultsToBigQuery([
           {
             baseUrl: errorResult.hotelConfig.url,
             checkin,
